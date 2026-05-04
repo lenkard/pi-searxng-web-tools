@@ -38,9 +38,9 @@ const WebSearchParams = Type.Object({
 	q: Type.String({ description: "Search query." }),
 	max_results: Type.Optional(Type.Integer({ minimum: 1, maximum: 50, default: 10, description: "Maximum number of results to return." })),
 	pageno: Type.Optional(Type.Integer({ minimum: 1, default: 1, description: "Search result page number." })),
-	language: Type.Optional(Type.String({ default: "all", description: "Language code, or 'all'." })),
+	language: Type.Optional(Type.String({ default: "auto", description: "Language code, 'auto', or 'all'." })),
 	categories: Type.Optional(Type.String({ description: "Optional SearXNG categories, comma-separated, e.g. 'general,news'." })),
-	engines: Type.Optional(Type.String({ description: "Optional SearXNG engines, comma-separated, e.g. 'duckduckgo,brave'." })),
+	engines: Type.Optional(Type.String({ description: "Optional SearXNG engines, comma-separated, e.g. 'bing,github'." })),
 	time_range: Type.Optional(Type.String({ description: "Optional time range: day, month, or year." })),
 });
 
@@ -67,7 +67,7 @@ export default function webSearchFetchExtension(pi: ExtensionAPI) {
 					q: params.q,
 					max_results: params.max_results ?? 10,
 					pageno: params.pageno ?? 1,
-					language: params.language ?? "all",
+					language: params.language ?? "auto",
 					categories: params.categories,
 					engines: params.engines,
 					time_range: params.time_range,

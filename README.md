@@ -4,7 +4,7 @@ Self-hosted web search and web page extraction for the [pi coding agent](https:/
 
 This project contains:
 
-- a SearXNG container configured with JSON API support
+- a SearXNG container configured with JSON API support and a small, reliable engine set
 - a small FastAPI wrapper that exposes clean `websearch` and `webfetch` endpoints
 - a pi extension that registers `web_search` and `web_fetch` tools
 
@@ -27,7 +27,7 @@ FastAPI wrapper:
 
 ```text
 GET  /health
-GET  /websearch?q=searxng&max_results=5
+GET  /websearch?q=searxng&max_results=5&language=auto
 POST /websearch
 GET  /webfetch?url=https://example.com&max_chars=20000
 POST /webfetch
@@ -192,9 +192,9 @@ Check connectivity from pi with:
   "q": "SearXNG API",
   "max_results": 10,
   "pageno": 1,
-  "language": "all",
+  "language": "auto",
   "categories": "general",
-  "engines": "duckduckgo,brave",
+  "engines": "bing,github",
   "time_range": "month"
 }
 ```
@@ -208,31 +208,24 @@ Check connectivity from pi with:
 }
 ```
 
-## What was changed during the original setup
+## Recommended SearXNG engine set
 
-The manual setup used these Docker resources:
-
-- network: `websearch_net`
-- volumes: `searxng_config`, `searxng_cache`, `webfetch_api_app`
-- containers: `searxng`, `webfetch-api`
-- published ports: `8888` for SearXNG, `8889` for the FastAPI wrapper
-
-The SearXNG `settings.yml` enabled JSON results:
-
-```yaml
-search:
-  formats:
-    - html
-    - json
-```
-
-The Pi extension was installed at:
+The example SearXNG `settings.yml` enables JSON results and keeps a small engine set that has tested well from Docker/container IPs:
 
 ```text
-~/.pi/agent/extensions/web-search-fetch.ts
+bing, github, stackoverflow, mdn, wikipedia, arxiv, pypi
 ```
 
-An older `npm:@ollama/pi-web-search` package was removed from pi settings because it registered the same `web_search` and `web_fetch` tool names and caused a conflict.
+This avoids noisier engines such as DuckDuckGo, Brave, Startpage and Mojeek, which can return CAPTCHA/403/429 errors from datacenter IPs.
+
+## Benchmark notes
+
+On a private Docker host, this setup tested around these rough timings:
+
+- `web_search`: median about `0.85s`, average about `0.97s` across five general/dev queries.
+- `web_fetch`: median about `0.08s`, average about `0.32s` across four static/article pages.
+
+These numbers depend heavily on network, upstream engines, cache state and target websites. For public SearXNG timing comparisons, see `https://searx.space/`.
 
 ## Security notes
 

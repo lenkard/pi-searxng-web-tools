@@ -28,7 +28,7 @@ curl http://localhost:8889/health
 Test search:
 
 ```bash
-curl 'http://localhost:8889/websearch?q=SearXNG%20API&max_results=2'
+curl 'http://localhost:8889/websearch?q=SearXNG%20API&max_results=2&language=auto'
 ```
 
 Test fetch:
@@ -59,6 +59,7 @@ Install pi extension manually from a clone:
 
 - Keep the pi tool names `web_search` and `web_fetch` unless intentionally changing compatibility.
 - Keep API paths `/websearch` and `/webfetch`; `/api/web_search` and `/api/web_fetch` are compatibility aliases.
+- The default SearXNG example intentionally keeps a small engine set: `bing`, `github`, `stackoverflow`, `mdn`, `wikipedia`, `arxiv`, `pypi`.
 - The pi extension default API base URL is `http://172.17.0.1:8889` for containerized pi environments. Users can override with `PI_WEB_API_BASE_URL`.
 - The pi package installs only the extension. It must not assume Docker services are running; document that the SearXNG/FastAPI endpoint is required separately.
 

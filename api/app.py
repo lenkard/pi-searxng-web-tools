@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from pydantic import BaseModel, HttpUrl
 from typing import Optional
 import os
@@ -17,7 +17,7 @@ class SearchBody(BaseModel):
     q: str
     max_results: int = 10
     pageno: int = 1
-    language: str = "all"
+    language: str = "auto"
     categories: Optional[str] = None
     engines: Optional[str] = None
     time_range: Optional[str] = None
@@ -28,7 +28,21 @@ class FetchBody(BaseModel):
     max_chars: int = 20000
 
 
-async def do_search(body: SearchBody):
+def forwarded_client_headers(request: Request) -> dict[str, str]:
+    """Forward a client IP hint to SearXNG to keep bot-detection logs clean."""
+    forwarded_for = request.headers.get("x-forwarded-for")
+    real_ip = request.headers.get("x-real-ip")
+    client_host = request.client.host if request.client else None
+
+    headers = {"User-Agent": USER_AGENT}
+    if forwarded_for:
+        headers["X-Forwarded-For"] = forwarded_for
+    if real_ip or client_host:
+        headers["X-Real-IP"] = real_ip or client_host or "127.0.0.1"
+    return headers
+
+
+async def do_search(body: SearchBody, request: Request):
     params = {
         "q": body.q,
         "format": "json",
@@ -41,7 +55,7 @@ async def do_search(body: SearchBody):
             params[key] = value
 
     try:
-        async with httpx.AsyncClient(timeout=30, headers={"User-Agent": USER_AGENT}) as client:
+        async with httpx.AsyncClient(timeout=30, headers=forwarded_client_headers(request)) as client:
             response = await client.get(SEARXNG_URL, params=params)
             response.raise_for_status()
             data = response.json()
@@ -112,10 +126,11 @@ async def health():
 
 @app.get("/websearch")
 async def websearch_get(
+    request: Request,
     q: str,
     max_results: int = 10,
     pageno: int = 1,
-    language: str = "all",
+    language: str = "auto",
     categories: Optional[str] = None,
     engines: Optional[str] = None,
     time_range: Optional[str] = None,
@@ -129,13 +144,14 @@ async def websearch_get(
             categories=categories,
             engines=engines,
             time_range=time_range,
-        )
+        ),
+        request,
     )
 
 
 @app.post("/websearch")
-async def websearch_post(body: SearchBody):
-    return await do_search(body)
+async def websearch_post(body: SearchBody, request: Request):
+    return await do_search(body, request)
 
 
 @app.get("/webfetch")
@@ -151,20 +167,21 @@ async def webfetch_post(body: FetchBody):
 # Compatibility aliases using underscored names.
 @app.get("/api/web_search")
 async def api_web_search_get(
+    request: Request,
     q: str,
     max_results: int = 10,
     pageno: int = 1,
-    language: str = "all",
+    language: str = "auto",
     categories: Optional[str] = None,
     engines: Optional[str] = None,
     time_range: Optional[str] = None,
 ):
-    return await websearch_get(q, max_results, pageno, language, categories, engines, time_range)
+    return await websearch_get(request, q, max_results, pageno, language, categories, engines, time_range)
 
 
 @app.post("/api/web_search")
-async def api_web_search_post(body: SearchBody):
-    return await do_search(body)
+async def api_web_search_post(body: SearchBody, request: Request):
+    return await do_search(body, request)
 
 
 @app.get("/api/web_fetch")

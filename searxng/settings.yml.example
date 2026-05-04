@@ -1,7 +1,21 @@
 # Copy this file to searxng/settings.yml and replace the secret_key.
 # Generate a key with: python3 -c 'import secrets; print(secrets.token_urlsafe(48))'
 
-use_default_settings: true
+use_default_settings:
+  engines:
+    # Keep the default engine list small and reliable for agent use.
+    # Bing provides general web results; the others are high-signal sources
+    # for coding/research queries. DuckDuckGo, Brave, Startpage and Mojeek are
+    # intentionally not enabled here because they often return CAPTCHA/403/429
+    # errors from container/datacenter IPs.
+    keep_only:
+      - bing
+      - github
+      - stackoverflow
+      - mdn
+      - wikipedia
+      - arxiv
+      - pypi
 
 server:
   secret_key: "CHANGE_ME_GENERATE_A_RANDOM_SECRET"
@@ -9,18 +23,62 @@ server:
   limiter: false
   public_instance: false
   image_proxy: true
+  method: "GET"
 
 search:
   safe_search: 0
   autocomplete: ""
-  default_lang: "all"
+  default_lang: "auto"
   formats:
     - html
     - json
+  ban_time_on_fail: 10
+  max_ban_time_on_fail: 300
 
 ui:
   static_use_hash: true
+  default_theme: simple
+  center_alignment: false
+  query_in_title: false
+  infinite_scroll: true
+  results_on_new_tab: true
+  theme_args:
+    simple_style: auto
 
 outgoing:
-  request_timeout: 8.0
-  max_request_timeout: 15.0
+  request_timeout: 5.0
+  max_request_timeout: 12.0
+  pool_connections: 100
+  pool_maxsize: 20
+  enable_http2: true
+
+engines:
+  - name: bing
+    disabled: false
+    weight: 1.2
+    timeout: 6.0
+
+  - name: github
+    disabled: false
+    weight: 1.0
+    timeout: 6.0
+
+  - name: stackoverflow
+    disabled: false
+    weight: 1.0
+
+  - name: mdn
+    disabled: false
+    weight: 1.0
+
+  - name: wikipedia
+    disabled: false
+    weight: 0.9
+
+  - name: arxiv
+    disabled: false
+    weight: 0.8
+
+  - name: pypi
+    disabled: false
+    weight: 0.8

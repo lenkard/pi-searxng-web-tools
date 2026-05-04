@@ -15,7 +15,7 @@ Run SearXNG plus a FastAPI wrapper and install a pi extension that registers two
 
 - `README.md`: human-facing setup and usage documentation
 - `docker-compose.yml`: starts SearXNG and the FastAPI wrapper
-- `searxng/settings.yml.example`: example SearXNG config with JSON format enabled
+- `searxng/settings.yml.example`: example SearXNG config with JSON format enabled and a small reliable engine set
 - `api/app.py`: FastAPI wrapper implementation
 - `api/Dockerfile`: container image for the wrapper
 - `api/requirements.txt`: Python dependencies
@@ -31,7 +31,7 @@ Run SearXNG plus a FastAPI wrapper and install a pi extension that registers two
 ## FastAPI endpoints
 
 - `GET /health`
-- `GET /websearch?q=<query>&max_results=10`
+- `GET /websearch?q=<query>&max_results=10&language=auto`
 - `POST /websearch`
 - `GET /webfetch?url=<url>&max_chars=20000`
 - `POST /webfetch`
@@ -62,6 +62,16 @@ PI_WEB_API_BASE_URL=http://localhost:8889 pi
 ```
 
 The default is useful when pi runs inside a container and Docker publishes the wrapper on the host. If pi runs directly on the Docker host, use `PI_WEB_API_BASE_URL=http://localhost:8889`.
+
+## Recommended engines
+
+The example SearXNG config keeps these engines only:
+
+```text
+bing, github, stackoverflow, mdn, wikipedia, arxiv, pypi
+```
+
+This avoids common CAPTCHA/403/429 noise from DuckDuckGo, Brave, Startpage and Mojeek on container/datacenter IPs.
 
 ## Security notes
 
