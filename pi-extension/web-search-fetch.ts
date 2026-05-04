@@ -11,11 +11,18 @@ function asErrorText(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
 }
 
+function getHeaders(): Record<string, string> {
+	const headers: Record<string, string> = { "content-type": "application/json" };
+	const apiKey = process.env.PI_WEB_API_KEY;
+	if (apiKey) headers["x-api-key"] = apiKey;
+	return headers;
+}
+
 async function fetchJson(path: string, body: unknown, signal?: AbortSignal): Promise<any> {
 	const baseUrl = getBaseUrl();
 	const response = await fetch(`${baseUrl}${path}`, {
 		method: "POST",
-		headers: { "content-type": "application/json" },
+		headers: getHeaders(),
 		body: JSON.stringify(body),
 		signal,
 	});

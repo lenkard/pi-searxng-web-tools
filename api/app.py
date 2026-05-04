@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException, Query, Request
 from pydantic import BaseModel, HttpUrl
 from typing import Optional
 import os
+import secrets
 
 import httpx
 import trafilatura
@@ -9,6 +10,7 @@ from bs4 import BeautifulSoup
 
 SEARXNG_URL = os.getenv("SEARXNG_URL", "http://searxng:8080/search")
 USER_AGENT = os.getenv("WEB_API_USER_AGENT", "Mozilla/5.0 (compatible; private-web-api/1.0)")
+WEB_API_KEY = os.getenv("WEB_API_KEY", "")
 
 app = FastAPI(title="Private Web Search/Fetch API", version="1.0.0")
 
@@ -26,6 +28,18 @@ class SearchBody(BaseModel):
 class FetchBody(BaseModel):
     url: HttpUrl
     max_chars: int = 20000
+
+
+def require_api_key(request: Request) -> None:
+    """Require a shared secret when WEB_API_KEY is configured."""
+    if not WEB_API_KEY:
+        return
+
+    authorization = request.headers.get("authorization", "")
+    bearer = authorization.removeprefix("Bearer ").strip() if authorization.startswith("Bearer ") else ""
+    key = request.headers.get("x-api-key") or bearer
+    if not key or not secrets.compare_digest(key, WEB_API_KEY):
+        raise HTTPException(status_code=401, detail="Missing or invalid API key")
 
 
 def forwarded_client_headers(request: Request) -> dict[str, str]:
@@ -135,6 +149,7 @@ async def websearch_get(
     engines: Optional[str] = None,
     time_range: Optional[str] = None,
 ):
+    require_api_key(request)
     return await do_search(
         SearchBody(
             q=q,
@@ -151,16 +166,19 @@ async def websearch_get(
 
 @app.post("/websearch")
 async def websearch_post(body: SearchBody, request: Request):
+    require_api_key(request)
     return await do_search(body, request)
 
 
 @app.get("/webfetch")
-async def webfetch_get(url: HttpUrl = Query(...), max_chars: int = 20000):
+async def webfetch_get(request: Request, url: HttpUrl = Query(...), max_chars: int = 20000):
+    require_api_key(request)
     return await fetch_url(str(url), max_chars)
 
 
 @app.post("/webfetch")
-async def webfetch_post(body: FetchBody):
+async def webfetch_post(body: FetchBody, request: Request):
+    require_api_key(request)
     return await fetch_url(str(body.url), body.max_chars)
 
 
@@ -181,14 +199,17 @@ async def api_web_search_get(
 
 @app.post("/api/web_search")
 async def api_web_search_post(body: SearchBody, request: Request):
+    require_api_key(request)
     return await do_search(body, request)
 
 
 @app.get("/api/web_fetch")
-async def api_web_fetch_get(url: HttpUrl = Query(...), max_chars: int = 20000):
+async def api_web_fetch_get(request: Request, url: HttpUrl = Query(...), max_chars: int = 20000):
+    require_api_key(request)
     return await fetch_url(str(url), max_chars)
 
 
 @app.post("/api/web_fetch")
-async def api_web_fetch_post(body: FetchBody):
+async def api_web_fetch_post(body: FetchBody, request: Request):
+    require_api_key(request)
     return await fetch_url(str(body.url), body.max_chars)

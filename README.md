@@ -70,6 +70,15 @@ Put the generated value into `server.secret_key` in `searxng/settings.yml`.
 docker compose up -d --build
 ```
 
+By default, Compose binds both ports to `127.0.0.1` only. They are reachable from the Docker host, not directly from the internet.
+
+Optional: require a shared API key for the FastAPI wrapper:
+
+```bash
+WEB_API_KEY='change-me-long-random-token' docker compose up -d --build
+export PI_WEB_API_KEY='change-me-long-random-token'
+```
+
 4. Test:
 
 ```bash
@@ -171,10 +180,16 @@ If pi runs directly on the same host as Docker, use localhost instead:
 export PI_WEB_API_BASE_URL=http://localhost:8889
 ```
 
-If the API runs on another machine, point pi at that host:
+If the API runs on another machine, expose it only through a VPN or authenticated reverse proxy, then point pi at that host:
 
 ```bash
 PI_WEB_API_BASE_URL=http://your-host:8889 pi
+```
+
+If you configured `WEB_API_KEY` on the API service, set the same key for pi:
+
+```bash
+PI_WEB_API_KEY='change-me-long-random-token' pi
 ```
 
 Check connectivity from pi with:
@@ -229,10 +244,13 @@ These numbers depend heavily on network, upstream engines, cache state and targe
 
 ## Security notes
 
-- This setup has no authentication by default.
+- Compose binds ports to `127.0.0.1` by default to prevent direct internet access.
+- The FastAPI wrapper supports optional shared-key auth with `WEB_API_KEY`; pi sends it with `PI_WEB_API_KEY`.
+- SearXNG itself has no API password by default; `server.secret_key` is not access control.
 - Do not expose port `8889` or `8888` publicly without a reverse proxy, authentication, and rate limiting.
 - Keep `searxng/settings.yml` private because it contains `server.secret_key`.
 - Public SearXNG instances can attract abusive traffic. Keep this private unless you know how to operate a public instance safely.
+- `/webfetch` fetches arbitrary URLs, so public exposure can create SSRF/open-proxy risk. Keep it private or protect it with auth and network filtering.
 
 ## Troubleshooting
 

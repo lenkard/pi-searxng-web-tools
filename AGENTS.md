@@ -60,9 +60,11 @@ Install pi extension manually from a clone:
 - Keep the pi tool names `web_search` and `web_fetch` unless intentionally changing compatibility.
 - Keep API paths `/websearch` and `/webfetch`; `/api/web_search` and `/api/web_fetch` are compatibility aliases.
 - The default SearXNG example intentionally keeps a small engine set: `bing`, `github`, `stackoverflow`, `mdn`, `wikipedia`, `arxiv`, `pypi`.
+- Docker Compose must bind published ports to `127.0.0.1` by default; do not change to `0.0.0.0` without documenting auth/firewall requirements.
+- The FastAPI wrapper supports optional shared-key auth with `WEB_API_KEY`; the pi extension sends `PI_WEB_API_KEY` as `X-API-Key`.
 - The pi extension default API base URL is `http://172.17.0.1:8889` for containerized pi environments. Users can override with `PI_WEB_API_BASE_URL`.
 - The pi package installs only the extension. It must not assume Docker services are running; document that the SearXNG/FastAPI endpoint is required separately.
 
 ## Security
 
-This project is intended for private/local usage. If exposing publicly, add authentication, rate limiting, and a reverse proxy.
+This project is intended for private/local usage. If exposing publicly, add authentication, rate limiting, reverse proxy protections, and SSRF/network egress filtering for `/webfetch`.
