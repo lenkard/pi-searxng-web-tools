@@ -78,19 +78,30 @@ curl 'http://localhost:8889/websearch?q=SearXNG%20API&max_results=2'
 curl 'http://localhost:8889/webfetch?url=https%3A%2F%2Fdocs.searxng.org%2Fdev%2Fsearch_api.html&max_chars=800'
 ```
 
-## Install the pi extension
+## Install as a pi package
 
-Install globally for the current user:
+This repository is a pi package. It has a `package.json` with a `pi.extensions` manifest that points to:
 
-```bash
-./install-extension.sh
+```text
+pi-extension/web-search-fetch.ts
 ```
 
-Or copy manually:
+Install the extension globally with pi:
 
 ```bash
-mkdir -p ~/.pi/agent/extensions
-cp pi-extension/web-search-fetch.ts ~/.pi/agent/extensions/web-search-fetch.ts
+pi install git:github.com/lenkard/pi-searxng-web-tools
+```
+
+Or install it only for the current project:
+
+```bash
+pi install -l git:github.com/lenkard/pi-searxng-web-tools
+```
+
+You can also test without installing permanently:
+
+```bash
+pi -e git:github.com/lenkard/pi-searxng-web-tools
 ```
 
 Then restart pi or run inside pi:
@@ -98,6 +109,23 @@ Then restart pi or run inside pi:
 ```text
 /reload
 ```
+
+### Manual extension install
+
+If you already cloned the repo, you can also install the extension by copying it:
+
+```bash
+./install-extension.sh
+```
+
+or manually:
+
+```bash
+mkdir -p ~/.pi/agent/extensions
+cp pi-extension/web-search-fetch.ts ~/.pi/agent/extensions/web-search-fetch.ts
+```
+
+## Registered pi tools
 
 The extension registers:
 
@@ -112,15 +140,24 @@ It also registers a status command:
 /webapi-status
 ```
 
-## Important network note
+## Important: the Docker/API endpoint is required
 
-The extension defaults to:
+The pi package only installs the **pi extension**. The extension does not run SearXNG itself. It calls an HTTP API endpoint that must already be reachable.
+
+You need both parts:
+
+1. **Docker services** from this repo:
+   - `searxng` on port `8888`
+   - `webfetch-api` on port `8889`
+2. **Pi package/extension** installed with `pi install` or copied manually.
+
+The extension defaults to this API base URL:
 
 ```text
 http://172.17.0.1:8889
 ```
 
-This was chosen for pi running in a container while the Docker host publishes the API on port `8889`.
+This default is useful when pi runs inside a Docker container. In that case, `localhost` means "inside the pi container", not the Docker host. `172.17.0.1` is commonly the Docker bridge gateway that lets the pi container reach services published on the Docker host.
 
 If pi runs directly on the same host as Docker, use localhost instead:
 
@@ -128,10 +165,16 @@ If pi runs directly on the same host as Docker, use localhost instead:
 export PI_WEB_API_BASE_URL=http://localhost:8889
 ```
 
-You can set any base URL with:
+If the API runs on another machine, point pi at that host:
 
 ```bash
 PI_WEB_API_BASE_URL=http://your-host:8889 pi
+```
+
+Check connectivity from pi with:
+
+```text
+/webapi-status
 ```
 
 ## Tool parameters

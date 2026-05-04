@@ -9,6 +9,7 @@ This repo implements self-hosted web search/fetch tooling for the pi coding agen
 1. `searxng` container provides metasearch and JSON search results.
 2. `api/app.py` exposes a small FastAPI wrapper for search and fetch.
 3. `pi-extension/web-search-fetch.ts` registers pi tools named `web_search` and `web_fetch`.
+4. `package.json` makes the repo installable as a pi package via `pi install git:github.com/lenkard/pi-searxng-web-tools`.
 
 ## Important commands
 
@@ -36,7 +37,13 @@ Test fetch:
 curl 'http://localhost:8889/webfetch?url=https%3A%2F%2Fdocs.searxng.org%2Fdev%2Fsearch_api.html&max_chars=800'
 ```
 
-Install pi extension:
+Install as pi package:
+
+```bash
+pi install git:github.com/lenkard/pi-searxng-web-tools
+```
+
+Install pi extension manually from a clone:
 
 ```bash
 ./install-extension.sh
@@ -53,6 +60,7 @@ Install pi extension:
 - Keep the pi tool names `web_search` and `web_fetch` unless intentionally changing compatibility.
 - Keep API paths `/websearch` and `/webfetch`; `/api/web_search` and `/api/web_fetch` are compatibility aliases.
 - The pi extension default API base URL is `http://172.17.0.1:8889` for containerized pi environments. Users can override with `PI_WEB_API_BASE_URL`.
+- The pi package installs only the extension. It must not assume Docker services are running; document that the SearXNG/FastAPI endpoint is required separately.
 
 ## Security
 

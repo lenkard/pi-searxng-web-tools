@@ -1,0 +1,30 @@
+{
+  "name": "pi-searxng-web-tools",
+  "version": "1.0.0",
+  "description": "Pi package providing web_search and web_fetch tools backed by a local SearXNG/FastAPI endpoint.",
+  "license": "MIT",
+  "keywords": [
+    "pi-package",
+    "pi-coding-agent",
+    "searxng",
+    "web-search",
+    "web-fetch"
+  ],
+  "homepage": "https://github.com/lenkard/pi-searxng-web-tools#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lenkard/pi-searxng-web-tools.git"
+  },
+  "bugs": {
+    "url": "https://github.com/lenkard/pi-searxng-web-tools/issues"
+  },
+  "peerDependencies": {
+    "@mariozechner/pi-coding-agent": "*",
+    "typebox": "*"
+  },
+  "pi": {
+    "extensions": [
+      "./pi-extension/web-search-fetch.ts"
+    ]
+  }
+}

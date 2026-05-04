@@ -21,6 +21,7 @@ Run SearXNG plus a FastAPI wrapper and install a pi extension that registers two
 - `api/requirements.txt`: Python dependencies
 - `pi-extension/web-search-fetch.ts`: pi extension registering `web_search` and `web_fetch`
 - `install-extension.sh`: copies the pi extension to `~/.pi/agent/extensions/`
+- `package.json`: pi package manifest; `pi.extensions` points to `./pi-extension/web-search-fetch.ts`
 
 ## Runtime ports
 
@@ -36,6 +37,16 @@ Run SearXNG plus a FastAPI wrapper and install a pi extension that registers two
 - `POST /webfetch`
 - Compatibility aliases: `/api/web_search` and `/api/web_fetch`
 
+## Pi package install
+
+Install as a pi package:
+
+```bash
+pi install git:github.com/lenkard/pi-searxng-web-tools
+```
+
+The pi package installs only the extension. The Docker/FastAPI endpoint must be running separately and reachable.
+
 ## Pi extension behavior
 
 The extension defaults to API base URL:
@@ -50,7 +61,7 @@ Override with:
 PI_WEB_API_BASE_URL=http://localhost:8889 pi
 ```
 
-The default is useful when pi runs inside a container and Docker publishes the wrapper on the host.
+The default is useful when pi runs inside a container and Docker publishes the wrapper on the host. If pi runs directly on the Docker host, use `PI_WEB_API_BASE_URL=http://localhost:8889`.
 
 ## Security notes
 
