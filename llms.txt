@@ -1,0 +1,69 @@
+# Pi SearXNG Web Tools
+
+This repository provides self-hosted web search and web page text extraction tools for the pi coding agent.
+
+Repository: https://github.com/lenkard/pi-searxng-web-tools
+
+## Main purpose
+
+Run SearXNG plus a FastAPI wrapper and install a pi extension that registers two tools:
+
+- `web_search`: searches the web through SearXNG JSON API
+- `web_fetch`: fetches a URL and extracts readable page text using httpx + trafilatura
+
+## Important files
+
+- `README.md`: human-facing setup and usage documentation
+- `docker-compose.yml`: starts SearXNG and the FastAPI wrapper
+- `searxng/settings.yml.example`: example SearXNG config with JSON format enabled
+- `api/app.py`: FastAPI wrapper implementation
+- `api/Dockerfile`: container image for the wrapper
+- `api/requirements.txt`: Python dependencies
+- `pi-extension/web-search-fetch.ts`: pi extension registering `web_search` and `web_fetch`
+- `install-extension.sh`: copies the pi extension to `~/.pi/agent/extensions/`
+
+## Runtime ports
+
+- SearXNG UI/API: `http://localhost:8888`
+- FastAPI wrapper: `http://localhost:8889`
+
+## FastAPI endpoints
+
+- `GET /health`
+- `GET /websearch?q=<query>&max_results=10`
+- `POST /websearch`
+- `GET /webfetch?url=<url>&max_chars=20000`
+- `POST /webfetch`
+- Compatibility aliases: `/api/web_search` and `/api/web_fetch`
+
+## Pi extension behavior
+
+The extension defaults to API base URL:
+
+```text
+http://172.17.0.1:8889
+```
+
+Override with:
+
+```bash
+PI_WEB_API_BASE_URL=http://localhost:8889 pi
+```
+
+The default is useful when pi runs inside a container and Docker publishes the wrapper on the host.
+
+## Security notes
+
+- No authentication is included by default.
+- Do not expose ports `8888` or `8889` publicly without auth/rate limiting.
+- Do not commit real `searxng/settings.yml`; it contains `server.secret_key`.
+
+## Minimal setup
+
+```bash
+cp searxng/settings.yml.example searxng/settings.yml
+# edit searxng/settings.yml and replace secret_key
+docker compose up -d --build
+./install-extension.sh
+# restart pi or run /reload
+```
