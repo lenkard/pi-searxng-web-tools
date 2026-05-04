@@ -1,0 +1,26 @@
+# Copy this file to searxng/settings.yml and replace the secret_key.
+# Generate a key with: python3 -c 'import secrets; print(secrets.token_urlsafe(48))'
+
+use_default_settings: true
+
+server:
+  secret_key: "CHANGE_ME_GENERATE_A_RANDOM_SECRET"
+  bind_address: "0.0.0.0"
+  limiter: false
+  public_instance: false
+  image_proxy: true
+
+search:
+  safe_search: 0
+  autocomplete: ""
+  default_lang: "all"
+  formats:
+    - html
+    - json
+
+ui:
+  static_use_hash: true
+
+outgoing:
+  request_timeout: 8.0
+  max_request_timeout: 15.0

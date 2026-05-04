@@ -1,0 +1,27 @@
+services:
+  searxng:
+    image: searxng/searxng:latest
+    container_name: searxng
+    restart: unless-stopped
+    ports:
+      - "8888:8080"
+    environment:
+      SEARXNG_BASE_URL: ${SEARXNG_BASE_URL:-http://localhost:8888/}
+      FORCE_OWNERSHIP: "true"
+    volumes:
+      - ./searxng:/etc/searxng
+      - searxng-cache:/var/cache/searxng
+
+  webfetch-api:
+    build: ./api
+    container_name: webfetch-api
+    restart: unless-stopped
+    depends_on:
+      - searxng
+    ports:
+      - "8889:8000"
+    environment:
+      SEARXNG_URL: http://searxng:8080/search
+
+volumes:
+  searxng-cache:

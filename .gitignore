@@ -1,0 +1,14 @@
+# SearXNG local config may contain secrets
+searxng/settings.yml
+searxng/*.db
+searxng/*.sqlite*
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# Node/editor
+node_modules/
+.DS_Store
+.env
