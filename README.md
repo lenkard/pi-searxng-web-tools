@@ -92,6 +92,12 @@ Install the extension globally with pi:
 pi install git:github.com/lenkard/pi-searxng-web-tools
 ```
 
+Or pin to a release tag:
+
+```bash
+pi install git:github.com/lenkard/pi-searxng-web-tools@v1.0.0
+```
+
 Or install it only for the current project:
 
 ```bash
