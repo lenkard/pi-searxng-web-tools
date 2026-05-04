@@ -49,7 +49,7 @@ The pi package installs only the extension. The Docker/FastAPI endpoint must be 
 
 ## Pi extension behavior
 
-Docker Compose binds published ports to `127.0.0.1` by default. The extension defaults to API base URL:
+Docker Compose binds published ports to `127.0.0.1` by default. If pi runs in another Docker container, set `WEB_API_BIND=172.17.0.1` or another private bridge/VPN IP rather than `0.0.0.0`. The extension defaults to API base URL:
 
 ```text
 http://172.17.0.1:8889
@@ -77,7 +77,7 @@ This avoids common CAPTCHA/403/429 noise from DuckDuckGo, Brave, Startpage and M
 
 ## Security notes
 
-- Compose binds ports to localhost by default.
+- Compose binds ports to localhost by default; use `WEB_API_BIND=<private-ip>` for container-to-host access.
 - Optional FastAPI shared-key auth is available with `WEB_API_KEY` / `PI_WEB_API_KEY`.
 - SearXNG `server.secret_key` is not an API password.
 - Do not expose ports `8888` or `8889` publicly without auth/rate limiting.

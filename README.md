@@ -72,6 +72,12 @@ docker compose up -d --build
 
 By default, Compose binds both ports to `127.0.0.1` only. They are reachable from the Docker host, not directly from the internet.
 
+If pi runs in another Docker container and must reach the wrapper through the Docker bridge gateway, bind only the FastAPI wrapper to that private gateway address, not to `0.0.0.0`:
+
+```bash
+WEB_API_BIND=172.17.0.1 docker compose up -d --build
+```
+
 Optional: require a shared API key for the FastAPI wrapper:
 
 ```bash
@@ -244,7 +250,7 @@ These numbers depend heavily on network, upstream engines, cache state and targe
 
 ## Security notes
 
-- Compose binds ports to `127.0.0.1` by default to prevent direct internet access.
+- Compose binds ports to `127.0.0.1` by default to prevent direct internet access. For container-to-host access, prefer a private bridge/VPN bind such as `WEB_API_BIND=172.17.0.1`; avoid `0.0.0.0`.
 - The FastAPI wrapper supports optional shared-key auth with `WEB_API_KEY`; pi sends it with `PI_WEB_API_KEY`.
 - SearXNG itself has no API password by default; `server.secret_key` is not access control.
 - Do not expose port `8889` or `8888` publicly without a reverse proxy, authentication, and rate limiting.

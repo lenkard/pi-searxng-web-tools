@@ -4,8 +4,8 @@ services:
     container_name: searxng
     restart: unless-stopped
     ports:
-      # Bind to localhost only. Do not expose SearXNG directly to the internet.
-      - "127.0.0.1:8888:8080"
+      # Bind to localhost by default. Set SEARXNG_BIND to a private/VPN IP only if needed.
+      - "${SEARXNG_BIND:-127.0.0.1}:8888:8080"
     environment:
       SEARXNG_BASE_URL: ${SEARXNG_BASE_URL:-http://localhost:8888/}
       FORCE_OWNERSHIP: "true"
@@ -20,8 +20,8 @@ services:
     depends_on:
       - searxng
     ports:
-      # Bind to localhost only. Put a reverse proxy/VPN with auth in front for remote use.
-      - "127.0.0.1:8889:8000"
+      # Bind to localhost by default. Set WEB_API_BIND to a private/VPN IP only if pi runs in another container.
+      - "${WEB_API_BIND:-127.0.0.1}:8889:8000"
     environment:
       SEARXNG_URL: http://searxng:8080/search
       # Optional shared secret for /websearch and /webfetch.
