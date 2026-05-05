@@ -1,0 +1,32 @@
+# Optional production override for deployments behind Nginx Proxy Manager.
+#
+# Assumes an existing Docker bridge network named `proxynet`, shared by NPM.
+# Example:
+#   docker network create --subnet 172.19.0.0/16 proxynet
+#   docker compose -f docker-compose.yml -f docker-compose.proxynet.yml up -d --build
+#
+# Nginx Proxy Manager can then use:
+#   search.braindump.forum -> http://searxng:8080
+# Optional fixed internal API alias:
+#   http://webfetch-api:8000 or http://webfetch:8000
+
+services:
+  searxng:
+    networks:
+      proxynet:
+        ipv4_address: ${SEARXNG_PROXYNET_IP:-172.19.0.10}
+        aliases:
+          - searxng
+
+  webfetch-api:
+    networks:
+      proxynet:
+        ipv4_address: ${WEBFETCH_PROXYNET_IP:-172.19.0.11}
+        aliases:
+          - webfetch-api
+          - webfetch
+
+networks:
+  proxynet:
+    external: true
+    name: ${PROXYNET_NAME:-proxynet}

@@ -4,16 +4,20 @@
 use_default_settings:
   engines:
     # Keep the default engine list small and reliable for agent use.
-    # Bing provides general web results; the others are high-signal sources
-    # for coding/research queries. DuckDuckGo, Brave, Startpage and Mojeek are
-    # intentionally not enabled here because they often return CAPTCHA/403/429
-    # errors from container/datacenter IPs.
+    # Notes from real-world testing on container/datacenter IPs:
+    # - Bing can return irrelevant results from some IP ranges.
+    # - DuckDuckGo and Brave commonly hit CAPTCHA/429 rate limits.
+    # - mdn and stackoverflow are not valid engine names in recent SearXNG;
+    #   use stackexchange for Stack Overflow-style results.
     keep_only:
-      - bing
-      - github
-      - stackoverflow
-      - mdn
+      - google
+      - qwant
+      - yahoo
+      - startpage
+      - mojeek
       - wikipedia
+      - github
+      - stackexchange
       - arxiv
       - pypi
 
@@ -46,39 +50,8 @@ ui:
     simple_style: auto
 
 outgoing:
-  request_timeout: 5.0
-  max_request_timeout: 12.0
+  request_timeout: 8.0
+  max_request_timeout: 15.0
   pool_connections: 100
   pool_maxsize: 20
   enable_http2: true
-
-engines:
-  - name: bing
-    disabled: false
-    weight: 1.2
-    timeout: 6.0
-
-  - name: github
-    disabled: false
-    weight: 1.0
-    timeout: 6.0
-
-  - name: stackoverflow
-    disabled: false
-    weight: 1.0
-
-  - name: mdn
-    disabled: false
-    weight: 1.0
-
-  - name: wikipedia
-    disabled: false
-    weight: 0.9
-
-  - name: arxiv
-    disabled: false
-    weight: 0.8
-
-  - name: pypi
-    disabled: false
-    weight: 0.8

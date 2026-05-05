@@ -231,20 +231,76 @@ Check connectivity from pi with:
 
 ## Recommended SearXNG engine set
 
-The example SearXNG `settings.yml` enables JSON results and keeps a small engine set that has tested well from Docker/container IPs:
+The example SearXNG `settings.yml` enables JSON results and keeps a small engine set that tested well from this Docker/container environment:
 
 ```text
-bing, github, stackoverflow, mdn, wikipedia, arxiv, pypi
+google, qwant, yahoo, startpage, mojeek, wikipedia, github, stackexchange, arxiv, pypi
 ```
 
-This avoids noisier engines such as DuckDuckGo, Brave, Startpage and Mojeek, which can return CAPTCHA/403/429 errors from datacenter IPs.
+Operational notes from testing:
+
+- `bing` can return irrelevant results from some datacenter/container IP ranges.
+- `duckduckgo` and `brave` commonly hit CAPTCHA/429 rate limits.
+- Recent SearXNG uses `stackexchange`; `stackoverflow` and `mdn` are not valid engine module names in the tested image.
+
+## Nginx Proxy Manager / proxynet deployment
+
+For a deployment behind Nginx Proxy Manager, use the optional Compose override:
+
+```bash
+docker network create --subnet 172.19.0.0/16 proxynet 2>/dev/null || true
+docker compose -f docker-compose.yml -f docker-compose.proxynet.yml up -d --build
+```
+
+This attaches both services to the external `proxynet` network with stable internal names/IPs:
+
+```text
+searxng      -> 172.19.0.10
+webfetch-api -> 172.19.0.11
+webfetch     -> 172.19.0.11
+```
+
+In Nginx Proxy Manager, create a proxy host for SearXNG:
+
+```text
+Domain Names: search.example.com
+Scheme: http
+Forward Hostname / IP: searxng
+Forward Port: 8080
+```
+
+Recommended NPM settings:
+
+```text
+Force SSL: enabled
+HTTP/2 Support: enabled
+Access List: enabled for private use
+```
+
+Do not expose `webfetch-api` publicly unless it is strongly protected; it can fetch arbitrary URLs.
 
 ## Benchmark notes
 
-On a private Docker host, this setup tested around these rough timings:
+On the tested private Docker host, the internal Pi/tools path was:
 
-- `web_search`: median about `0.85s`, average about `0.97s` across five general/dev queries.
-- `web_fetch`: median about `0.08s`, average about `0.32s` across four static/article pages.
+```text
+Pi/tools -> webfetch-api:8889 -> searxng:8080
+```
+
+Run the included benchmark script:
+
+```bash
+python3 scripts/benchmark.py
+# or
+WEB_API_BASE=http://localhost:8889 python3 scripts/benchmark.py
+```
+
+Small functional benchmark results from the tested host:
+
+- `web_search`: 5/5 success, median `~0.51-0.69s`, average `~0.63-0.73s`, max `~1.04s`.
+- Direct internal SearXNG: 5/5 success, median `~0.52s`, average `~0.62s`, max `~1.01s`.
+- `web_fetch`: 5/5 success, median `~0.24-0.36s`, average `~0.39-0.44s`, max `~1.06s`.
+- Public NPM ACL block test: 5/5 returned `403`, around `15-26ms`.
 
 These numbers depend heavily on network, upstream engines, cache state and target websites. For public SearXNG timing comparisons, see `https://searx.space/`.
 

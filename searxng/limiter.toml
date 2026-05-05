@@ -1,0 +1,4 @@
+# Limiter is disabled via settings.yml (server.limiter: false).
+# This file is intentionally present to suppress SearXNG's missing limiter.toml warning.
+[botdetection.ip_limit]
+link_token = false
