@@ -2,6 +2,8 @@
 
 Self-hosted web search and web page extraction for the [pi coding agent](https://github.com/mariozechner/pi-coding-agent).
 
+Current release: `v1.1.0`. See [`CHANGELOG.md`](CHANGELOG.md) for security, deployment, and benchmark notes.
+
 This project contains:
 
 - a SearXNG container configured with JSON API support and a small, reliable engine set
