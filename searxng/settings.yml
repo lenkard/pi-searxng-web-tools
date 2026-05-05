@@ -1,15 +1,5 @@
-# Copy this file to searxng/settings.yml.
-# The SearXNG secret is provided by the SEARXNG_SECRET environment variable.
-# Generate one with: python3 -c 'import secrets; print(secrets.token_urlsafe(48))'
-
 use_default_settings:
   engines:
-    # Keep the default engine list small and reliable for agent use.
-    # Notes from real-world testing on container/datacenter IPs:
-    # - Bing can return irrelevant results from some IP ranges.
-    # - DuckDuckGo and Brave commonly hit CAPTCHA/429 rate limits.
-    # - mdn and stackoverflow are not valid engine names in recent SearXNG;
-    #   use stackexchange for Stack Overflow-style results.
     keep_only:
       - google
       - qwant

@@ -1,5 +1,5 @@
-# SearXNG local config may contain secrets
-searxng/settings.yml
+# Secrets live in .env; SearXNG settings.yml is safe to version when
+# server.secret_key is provided through SEARXNG_SECRET.
 searxng/*.db
 searxng/*.sqlite*
 

@@ -52,17 +52,17 @@ GET /search?q=test&format=json
 
 1. Clone the repository.
 
-2. Create the SearXNG config:
+2. Create the environment file with the SearXNG secret outside `settings.yml`:
 
 ```bash
-cp searxng/settings.yml.example searxng/settings.yml
+cp .env.example .env
 python3 - <<'PY'
 import secrets
 print(secrets.token_urlsafe(48))
 PY
 ```
 
-Put the generated value into `server.secret_key` in `searxng/settings.yml`.
+Put the generated value into `SEARXNG_SECRET` in `.env`. The committed `searxng/settings.yml` does not contain secrets.
 
 3. Start the services:
 
@@ -310,7 +310,7 @@ These numbers depend heavily on network, upstream engines, cache state and targe
 - The FastAPI wrapper supports optional shared-key auth with `WEB_API_KEY`; pi sends it with `PI_WEB_API_KEY`.
 - SearXNG itself has no API password by default; `server.secret_key` is not access control.
 - Do not expose port `8889` or `8888` publicly without a reverse proxy, authentication, and rate limiting.
-- Keep `searxng/settings.yml` private because it contains `server.secret_key`.
+- Keep `.env` private because it contains `SEARXNG_SECRET` and may contain `WEB_API_KEY`.
 - Public SearXNG instances can attract abusive traffic. Keep this private unless you know how to operate a public instance safely.
 - `/webfetch` fetches arbitrary URLs, so public exposure can create SSRF/open-proxy risk. Keep it private or protect it with auth and network filtering.
 

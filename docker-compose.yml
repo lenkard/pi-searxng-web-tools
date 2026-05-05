@@ -8,6 +8,8 @@ services:
       - "${SEARXNG_BIND:-127.0.0.1}:8888:8080"
     environment:
       SEARXNG_BASE_URL: ${SEARXNG_BASE_URL:-http://localhost:8888/}
+      # SearXNG reads this as server.secret_key. Keep it in .env, not settings.yml.
+      SEARXNG_SECRET: ${SEARXNG_SECRET:?Set SEARXNG_SECRET in .env}
       FORCE_OWNERSHIP: "true"
     volumes:
       - ./searxng:/etc/searxng
