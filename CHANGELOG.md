@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.2.1 - 2026-07-10
+
+### Packaging
+
+- Marked Pi-provided SDK peer dependencies as optional so git package installation does not download a duplicate Pi runtime.
+
 ## v1.2.0 - 2026-07-10
 
 ### Compatibility
