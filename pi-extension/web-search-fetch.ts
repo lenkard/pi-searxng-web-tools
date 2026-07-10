@@ -64,6 +64,7 @@ export default function webSearchFetchExtension(pi: ExtensionAPI) {
 		promptSnippet: "Search the web using the local SearXNG-backed API",
 		promptGuidelines: [
 			"Use web_search when the user asks for current web information, internet research, recent docs, product pages, news, or URLs.",
+			"For focused technical searches, web_search can select github, pypi, arxiv, or wikipedia with the engines parameter instead of a general engine.",
 			"After web_search finds a likely source, use web_fetch to retrieve the page text when details or citations are needed.",
 		],
 		parameters: WebSearchParams,
