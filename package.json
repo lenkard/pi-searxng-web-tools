@@ -19,6 +19,7 @@
     "url": "https://github.com/lenkard/pi-searxng-web-tools/issues"
   },
   "peerDependencies": {
+    "@earendil-works/pi-ai": "*",
     "@earendil-works/pi-coding-agent": ">=0.80.0",
     "typebox": "*"
   },

@@ -12,6 +12,9 @@
 - Updated the SearXNG engine set from tests on a new OCI datacenter IP.
 - Added a configurable sequential fallback chain (`mojeek,yep,bing,wiby`) instead of fragile category-wide aggregation.
 - Added selected/attempted engine metadata and upstream failure diagnostics.
+- Added free `fast`, `balanced`, and `deep` search modes.
+- Added quality-triggered fallback, URL deduplication, reciprocal-rank fusion, in-memory caching, and automatic engine cooldowns.
+- Kept Codex/OpenAI search out of the routing path so search does not consume the user's Codex allowance.
 - Added `SEARCH-PROVIDER-PLAN.md` with current provider research and a hybrid architecture recommendation.
 
 ## v1.1.0 - 2026-05-05

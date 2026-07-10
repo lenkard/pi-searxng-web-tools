@@ -218,7 +218,8 @@ Check connectivity from pi with:
   "language": "auto",
   "categories": "general",
   "engines": "bing,github",
-  "time_range": "month"
+  "time_range": "month",
+  "mode": "balanced"
 }
 ```
 
@@ -253,6 +254,16 @@ SEARXNG_DEFAULT_ENGINES=yep,bing,mwmbl,wiby docker compose up -d
 ```
 
 Callers can always override this behavior with the `engines` tool parameter; an explicit comma-separated value uses SearXNG's normal aggregation.
+
+Free search modes:
+
+- `fast` stops at the first non-empty engine response.
+- `balanced` (default) scores relevance and domain diversity, querying one additional free engine only when the first response is weak.
+- `deep` combines up to three free engines using URL deduplication and reciprocal-rank fusion.
+
+The wrapper caches successful searches for 15 minutes by default and temporarily cools down engines that return CAPTCHA, 429, suspension, or access-denied diagnostics. Configure these controls with `SEARCH_CACHE_TTL_SECONDS`, `ENGINE_COOLDOWN_SECONDS`, and `BALANCED_QUALITY_THRESHOLD`.
+
+No Codex/OpenAI search is used, so searches do not consume the user's Codex allowance.
 
 ## Nginx Proxy Manager / proxynet deployment
 

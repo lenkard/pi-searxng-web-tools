@@ -2,6 +2,8 @@
 
 Research date: 2026-07-10. Prices and free tiers change; verify the linked provider page before implementation.
 
+Current deployment decision: use only self-hosted/free SearXNG engines for search. Codex/OpenAI hosted search is intentionally excluded so web searches do not consume the user's Codex allowance.
+
 ## Finding from the OCI deployment
 
 A one-day-old OCI IP did not make scraping-based search reliable. In the first controlled test:

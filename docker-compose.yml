@@ -28,6 +28,9 @@ services:
       SEARXNG_URL: http://searxng:8080/search
       # Sequential fallback chain; callers may still pass an engines parameter.
       SEARXNG_DEFAULT_ENGINES: ${SEARXNG_DEFAULT_ENGINES:-mojeek,yep,bing,mwmbl,wiby}
+      SEARCH_CACHE_TTL_SECONDS: ${SEARCH_CACHE_TTL_SECONDS:-900}
+      ENGINE_COOLDOWN_SECONDS: ${ENGINE_COOLDOWN_SECONDS:-300}
+      BALANCED_QUALITY_THRESHOLD: ${BALANCED_QUALITY_THRESHOLD:-0.58}
       # Optional shared secret for /websearch and /webfetch.
       # If set, clients must send X-API-Key or Authorization: Bearer <key>.
       WEB_API_KEY: ${WEB_API_KEY:-}

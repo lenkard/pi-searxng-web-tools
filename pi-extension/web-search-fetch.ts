@@ -1,4 +1,5 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { StringEnum } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
 
 const DEFAULT_BASE_URL = "http://172.17.0.1:8889";
@@ -49,6 +50,7 @@ const WebSearchParams = Type.Object({
 	categories: Type.Optional(Type.String({ description: "Optional SearXNG categories, comma-separated, e.g. 'general,news'." })),
 	engines: Type.Optional(Type.String({ description: "Optional SearXNG engines, comma-separated, e.g. 'bing,github'." })),
 	time_range: Type.Optional(Type.String({ description: "Optional time range: day, month, or year." })),
+	mode: Type.Optional(StringEnum(["fast", "balanced", "deep"] as const, { description: "Search strategy: fast uses the first usable free engine; balanced adds a second engine only for weak results; deep combines up to three free engines." })),
 });
 
 const WebFetchParams = Type.Object({
@@ -79,6 +81,7 @@ export default function webSearchFetchExtension(pi: ExtensionAPI) {
 					categories: params.categories,
 					engines: params.engines,
 					time_range: params.time_range,
+					mode: params.mode ?? "balanced",
 				}, signal);
 
 				const results = Array.isArray(data.results) ? data.results : [];
