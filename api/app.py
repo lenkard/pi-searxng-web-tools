@@ -9,6 +9,7 @@ import trafilatura
 from bs4 import BeautifulSoup
 
 SEARXNG_URL = os.getenv("SEARXNG_URL", "http://searxng:8080/search")
+SEARXNG_DEFAULT_ENGINES = os.getenv("SEARXNG_DEFAULT_ENGINES", "mojeek").strip()
 USER_AGENT = os.getenv("WEB_API_USER_AGENT", "Mozilla/5.0 (compatible; private-web-api/1.0)")
 WEB_API_KEY = os.getenv("WEB_API_KEY", "")
 
@@ -67,6 +68,11 @@ async def do_search(body: SearchBody, request: Request):
         value = getattr(body, key)
         if value:
             params[key] = value
+    # SearXNG's category-wide aggregation returned empty sets when some engines
+    # failed on the tested datacenter IP. A configurable single-engine default
+    # gives predictable behavior while callers can still request other engines.
+    if "engines" not in params and SEARXNG_DEFAULT_ENGINES:
+        params["engines"] = SEARXNG_DEFAULT_ENGINES
 
     try:
         async with httpx.AsyncClient(timeout=30, headers=forwarded_client_headers(request)) as client:
@@ -95,6 +101,9 @@ async def do_search(body: SearchBody, request: Request):
         "results": results,
         "answers": data.get("answers", []),
         "suggestions": data.get("suggestions", []),
+        # Preserve SearXNG diagnostics so an empty result set is distinguishable
+        # from upstream CAPTCHA, rate-limit, timeout, and protocol failures.
+        "unresponsive_engines": data.get("unresponsive_engines", []),
     }
 
 
@@ -135,7 +144,7 @@ async def fetch_url(url: str, max_chars: int):
 
 @app.get("/health")
 async def health():
-    return {"ok": True, "searxng": SEARXNG_URL}
+    return {"ok": True, "searxng": SEARXNG_URL, "default_engines": SEARXNG_DEFAULT_ENGINES}
 
 
 @app.get("/websearch")

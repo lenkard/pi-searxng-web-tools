@@ -1,0 +1,99 @@
+# Search provider plan
+
+Research date: 2026-07-10. Prices and free tiers change; verify the linked provider page before implementation.
+
+## Finding from the OCI deployment
+
+A one-day-old OCI IP did not make scraping-based search reliable. In the first controlled test:
+
+| SearXNG engine | Result |
+|---|---|
+| Bing | Working initially |
+| Mojeek | Working initially, then temporarily suspended after repeated tests |
+| Yep | Working |
+| Wiby | Working, but a small/independent index |
+| Brave | HTTP 429 |
+| DuckDuckGo | CAPTCHA |
+| Startpage | CAPTCHA |
+| Qwant | Access denied |
+| Yahoo | HTTP protocol errors |
+
+This confirms that IP age is not the main issue. Datacenter ASN reputation, engine anti-bot policy, geography, and request pattern matter more. SearXNG should remain a fallback, not the reliability layer.
+
+## Provider comparison
+
+| Provider | Free use observed | Paid price observed | Fit for Pi |
+|---|---:|---:|---|
+| [Exa](https://exa.ai/pricing) | Up to 20,000 requests/month | Usage-dependent; verify dashboard | Best first candidate for agent-oriented semantic search and content retrieval |
+| [Tavily](https://www.tavily.com/pricing) | 1,000 API credits/month, no card | $0.008/credit pay-as-you-go shown | Strong research-oriented search; advanced operations consume more credits |
+| [Brave Search API](https://brave.com/search/api/) | $5 monthly credit; card required | $5/1,000 requests for the Search plan shown | Independent web index, predictable general search, good fallback |
+| [Serper](https://serper.dev/) | 2,500 introductory queries, no card | From $1/1,000 at 50k credits; cheaper at volume | Google-like SERP results; free allocation appears introductory rather than monthly |
+| [Google Custom Search JSON API](https://developers.google.com/custom-search/v1/overview) | 100/day for existing users | $5/1,000 | Not available to new customers according to Google documentation |
+| [SearchApi](https://www.searchapi.io/pricing) | 100 introductory requests | Plans from $40/month; $4/1,000 shown | Broad SERP support, but poor value for this small deployment |
+| [OpenRouter web search](https://openrouter.ai/docs/guides/features/web-search) | Not generally free | Exa/Parallel/Perplexity shown at $0.005/request | Convenient when OpenRouter billing is already configured |
+| [Perplexity Search API](https://docs.perplexity.ai/getting-started/pricing) | No recurring free tier confirmed | $5/1,000 searches; fetch URL $0.0005 each shown | Simple managed search/fetch fallback |
+| SearXNG | Unlimited software, no API fee | VPS and operational cost | Free fallback and vertical search; unreliable for general engines on VPS IPs |
+
+## Free vertical sources
+
+Route technical queries to first-party APIs before spending general-search credits:
+
+- GitHub REST/search APIs for repositories, issues, releases, and code where permitted.
+- Stack Exchange API for programming questions.
+- PyPI and npm registry APIs for packages.
+- arXiv, Crossref, and OpenAlex for scholarly material.
+- Wikimedia APIs for encyclopedic topics.
+- RSS/Atom feeds for known news and release sources.
+
+Each source needs its own rate-limit policy and attribution compliance.
+
+## Recommended provider order
+
+1. **Exa primary** while its recurring 20,000-request free tier remains available.
+2. **First-party vertical APIs** for GitHub, packages, Stack Exchange, and academic queries.
+3. **Brave API fallback** for independent general-web coverage; its monthly credit currently covers about 1,000 searches.
+4. **Tavily optional deep-research provider** rather than spending its credits on every basic query.
+5. **SearXNG last fallback**, using only engines currently healthy on this server.
+
+If Exa's free-tier terms do not fit the project after account verification, invert steps 1 and 3: Brave primary, Tavily for deep research, SearXNG fallback.
+
+## Proposed implementation
+
+Create a provider-neutral backend interface:
+
+```text
+SearchProvider.search(query, options) -> normalized results + diagnostics
+ContentProvider.fetch(url, options) -> extracted document + metadata
+```
+
+Normalized search result fields:
+
+```text
+title, url, snippet, published_at, provider, engine, rank, score
+```
+
+Routing modes:
+
+- `fast`: one primary provider; low latency and cost.
+- `balanced`: primary provider plus vertical source when query intent matches.
+- `deep`: two providers, result fusion, and fetch top sources.
+
+Reliability behavior:
+
+- Per-provider timeout and circuit breaker.
+- Retry only transient 429/5xx responses and honor `Retry-After`.
+- Cache normalized searches by query/options.
+- Canonicalize and deduplicate URLs.
+- Fuse multiple rankings with reciprocal-rank fusion.
+- Return provider failures in diagnostics instead of silently returning an empty list.
+- Track success rate, relevant result in top 3, latency, 429/CAPTCHA rate, and cost per successful query.
+
+## Rollout
+
+1. Keep the deployed private SearXNG service as a baseline.
+2. Add the provider interface without changing the Pi tool names.
+3. Implement Exa and SearXNG adapters first.
+4. Add Brave and Tavily adapters behind environment variables.
+5. Add query-intent routing for vertical APIs.
+6. Run a fixed relevance benchmark and a 72-hour health probe.
+7. Select defaults from measured quality and cost, not only latency.

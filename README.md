@@ -236,14 +236,23 @@ Check connectivity from pi with:
 The example SearXNG `settings.yml` enables JSON results and keeps a small engine set that tested well from this Docker/container environment:
 
 ```text
-google, qwant, yahoo, startpage, mojeek, wikipedia, github, stackexchange, arxiv, pypi
+bing, mojeek, yep, wiby, wikipedia, github, arxiv, pypi
 ```
 
-Operational notes from testing:
+Operational notes from testing on a new OCI datacenter IP (2026-07-10):
 
-- `bing` can return irrelevant results from some datacenter/container IP ranges.
-- `duckduckgo` and `brave` commonly hit CAPTCHA/429 rate limits.
-- Recent SearXNG uses `stackexchange`; `stackoverflow` and `mdn` are not valid engine module names in the tested image.
+- `bing`, `mojeek`, `yep`, and `wiby` returned results during the initial test.
+- `brave` returned HTTP 429, `duckduckgo` and `startpage` returned CAPTCHA, `qwant` denied access, and `yahoo` had protocol errors.
+- `google` is marked inactive and `stackexchange` was not available in the tested SearXNG 2026.7.9 image.
+- Upstream behavior is IP- and time-dependent. Even currently working scraping engines may later block a datacenter IP; use an official API provider as the primary source for reliable production use.
+
+The wrapper defaults to a single `mojeek` engine because category-wide aggregation returned empty result sets when other engines failed. Override it without rebuilding:
+
+```bash
+SEARXNG_DEFAULT_ENGINES=yep docker compose up -d
+```
+
+Callers can always override the default with the `engines` tool parameter.
 
 ## Nginx Proxy Manager / proxynet deployment
 

@@ -26,6 +26,9 @@ services:
       - "${WEB_API_BIND:-127.0.0.1}:8889:8000"
     environment:
       SEARXNG_URL: http://searxng:8080/search
+      # Category-wide aggregation can fail when one scraped engine is blocked.
+      # Use one known-good default; callers may still pass an engines parameter.
+      SEARXNG_DEFAULT_ENGINES: ${SEARXNG_DEFAULT_ENGINES:-mojeek}
       # Optional shared secret for /websearch and /webfetch.
       # If set, clients must send X-API-Key or Authorization: Bearer <key>.
       WEB_API_KEY: ${WEB_API_KEY:-}

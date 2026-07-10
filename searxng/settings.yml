@@ -1,14 +1,15 @@
 use_default_settings:
   engines:
+    # General engines observed working from a new OCI datacenter IP on 2026-07-10.
+    # Scraping-based engines can still degrade or block the IP over time; an API
+    # provider should be the long-term primary and SearXNG the fallback.
     keep_only:
-      - google
-      - qwant
-      - yahoo
-      - startpage
+      - bing
       - mojeek
+      - yep
+      - wiby
       - wikipedia
       - github
-      - stackexchange
       - arxiv
       - pypi
 

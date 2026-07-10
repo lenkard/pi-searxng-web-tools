@@ -53,7 +53,7 @@ const WebSearchParams = Type.Object({
 
 const WebFetchParams = Type.Object({
 	url: Type.String({ description: "URL to fetch and extract readable text from." }),
-	max_chars: Type.Optional(Type.Integer({ minimum: 100, maximum: 200000, default: 20000, description: "Maximum extracted text characters to return." })),
+	max_chars: Type.Optional(Type.Integer({ minimum: 100, maximum: 50000, default: 20000, description: "Maximum extracted text characters to return (capped to protect agent context)." })),
 });
 
 export default function webSearchFetchExtension(pi: ExtensionAPI) {
@@ -88,15 +88,17 @@ export default function webSearchFetchExtension(pi: ExtensionAPI) {
 					return `${i + 1}. ${title}\n   ${url}${content}`;
 				});
 
+				const failures = Array.isArray(data.unresponsive_engines) ? data.unresponsive_engines : [];
+				const failureText = failures.length
+					? `\n\nUpstream engine failures: ${failures.map((item: any) => Array.isArray(item) ? item.join(": ") : String(item)).join("; ")}`
+					: "";
+
 				return {
-					content: [{ type: "text", text: lines.length ? lines.join("\n\n") : "No search results found." }],
+					content: [{ type: "text", text: lines.length ? `${lines.join("\n\n")}${failureText}` : `No search results found.${failureText}` }],
 					details: data,
 				};
 			} catch (error) {
-				return {
-					content: [{ type: "text", text: `web_search failed: ${asErrorText(error)}` }],
-					isError: true,
-				};
+				throw new Error(`web_search failed: ${asErrorText(error)}`);
 			}
 		},
 	});
@@ -127,10 +129,7 @@ export default function webSearchFetchExtension(pi: ExtensionAPI) {
 					details: data,
 				};
 			} catch (error) {
-				return {
-					content: [{ type: "text", text: `web_fetch failed: ${asErrorText(error)}` }],
-					isError: true,
-				};
+				throw new Error(`web_fetch failed: ${asErrorText(error)}`);
 			}
 		},
 	});

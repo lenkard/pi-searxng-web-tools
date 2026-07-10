@@ -5,20 +5,19 @@
 use_default_settings:
   engines:
     # Keep the default engine list small and reliable for agent use.
-    # Notes from real-world testing on container/datacenter IPs:
-    # - Bing can return irrelevant results from some IP ranges.
-    # - DuckDuckGo and Brave commonly hit CAPTCHA/429 rate limits.
-    # - mdn and stackoverflow are not valid engine names in recent SearXNG;
-    #   use stackexchange for Stack Overflow-style results.
+    # Observed from a new OCI datacenter IP on 2026-07-10:
+    # - Bing, Mojeek, Yep, and Wiby returned results.
+    # - Brave returned 429, DuckDuckGo/Startpage returned CAPTCHA,
+    #   Qwant denied access, and Yahoo had protocol errors.
+    # - Scraping-based engines can change behavior at any time. Use an
+    #   official search API as the long-term primary and SearXNG as fallback.
     keep_only:
-      - google
-      - qwant
-      - yahoo
-      - startpage
+      - bing
       - mojeek
+      - yep
+      - wiby
       - wikipedia
       - github
-      - stackexchange
       - arxiv
       - pypi
 
