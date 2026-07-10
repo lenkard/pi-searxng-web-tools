@@ -9,7 +9,7 @@ import trafilatura
 from bs4 import BeautifulSoup
 
 SEARXNG_URL = os.getenv("SEARXNG_URL", "http://searxng:8080/search")
-SEARXNG_DEFAULT_ENGINES = os.getenv("SEARXNG_DEFAULT_ENGINES", "mojeek").strip()
+SEARXNG_DEFAULT_ENGINES = os.getenv("SEARXNG_DEFAULT_ENGINES", "mojeek,yep,bing,mwmbl,wiby").strip()
 USER_AGENT = os.getenv("WEB_API_USER_AGENT", "Mozilla/5.0 (compatible; private-web-api/1.0)")
 WEB_API_KEY = os.getenv("WEB_API_KEY", "")
 
@@ -58,29 +58,56 @@ def forwarded_client_headers(request: Request) -> dict[str, str]:
 
 
 async def do_search(body: SearchBody, request: Request):
-    params = {
+    base_params = {
         "q": body.q,
         "format": "json",
         "pageno": body.pageno,
         "language": body.language,
     }
-    for key in ("categories", "engines", "time_range"):
+    for key in ("categories", "time_range"):
         value = getattr(body, key)
         if value:
-            params[key] = value
-    # SearXNG's category-wide aggregation returned empty sets when some engines
-    # failed on the tested datacenter IP. A configurable single-engine default
-    # gives predictable behavior while callers can still request other engines.
-    if "engines" not in params and SEARXNG_DEFAULT_ENGINES:
-        params["engines"] = SEARXNG_DEFAULT_ENGINES
+            base_params[key] = value
 
-    try:
-        async with httpx.AsyncClient(timeout=30, headers=forwarded_client_headers(request)) as client:
-            response = await client.get(SEARXNG_URL, params=params)
-            response.raise_for_status()
-            data = response.json()
-    except Exception as error:
-        raise HTTPException(status_code=502, detail=f"SearXNG search failed: {error}")
+    # Explicit caller input keeps SearXNG's normal comma-separated aggregation.
+    # The configured default is instead a sequential fallback chain. This avoids
+    # blocked engines poisoning a combined response and sends only one upstream
+    # request in the common case where the first engine succeeds.
+    engine_attempts = [body.engines] if body.engines else [
+        engine.strip() for engine in SEARXNG_DEFAULT_ENGINES.split(",") if engine.strip()
+    ]
+    if not engine_attempts:
+        engine_attempts = [None]
+
+    data = None
+    selected_engine = None
+    diagnostics = []
+    attempted_engines = []
+    last_error = None
+
+    async with httpx.AsyncClient(timeout=30, headers=forwarded_client_headers(request)) as client:
+        for engine in engine_attempts:
+            params = dict(base_params)
+            if engine:
+                params["engines"] = engine
+                attempted_engines.append(engine)
+            try:
+                response = await client.get(SEARXNG_URL, params=params)
+                response.raise_for_status()
+                candidate = response.json()
+            except Exception as error:
+                last_error = error
+                diagnostics.append([engine or "default", f"request failed: {error}"])
+                continue
+
+            diagnostics.extend(candidate.get("unresponsive_engines", []))
+            data = candidate
+            if candidate.get("results") or candidate.get("answers"):
+                selected_engine = engine
+                break
+
+    if data is None:
+        raise HTTPException(status_code=502, detail=f"SearXNG search failed: {last_error or 'no engine responded'}")
 
     max_results = max(1, min(body.max_results, 50))
     results = []
@@ -101,9 +128,11 @@ async def do_search(body: SearchBody, request: Request):
         "results": results,
         "answers": data.get("answers", []),
         "suggestions": data.get("suggestions", []),
-        # Preserve SearXNG diagnostics so an empty result set is distinguishable
-        # from upstream CAPTCHA, rate-limit, timeout, and protocol failures.
-        "unresponsive_engines": data.get("unresponsive_engines", []),
+        "selected_engine": selected_engine,
+        "attempted_engines": attempted_engines,
+        # Preserve diagnostics so an empty result set is distinguishable from
+        # upstream CAPTCHA, rate-limit, timeout, and protocol failures.
+        "unresponsive_engines": diagnostics,
     }
 
 

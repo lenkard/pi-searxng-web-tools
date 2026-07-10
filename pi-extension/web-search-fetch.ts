@@ -1,4 +1,4 @@
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 
 const DEFAULT_BASE_URL = "http://172.17.0.1:8889";
@@ -140,7 +140,7 @@ export default function webSearchFetchExtension(pi: ExtensionAPI) {
 			try {
 				const response = await fetch(`${getBaseUrl()}/health`);
 				const text = await response.text();
-				ctx.ui.notify(`Web API ${response.status}: ${text}`, response.ok ? "success" : "warning");
+				ctx.ui.notify(`Web API ${response.status}: ${text}`, response.ok ? "info" : "warning");
 			} catch (error) {
 				ctx.ui.notify(`Web API check failed: ${asErrorText(error)}`, "error");
 			}

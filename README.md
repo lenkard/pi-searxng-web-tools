@@ -2,7 +2,7 @@
 
 Self-hosted web search and web page extraction for the [pi coding agent](https://github.com/mariozechner/pi-coding-agent).
 
-Current release: `v1.1.0`. See [`CHANGELOG.md`](CHANGELOG.md) for security, deployment, and benchmark notes.
+Current release: `v1.2.0`. See [`CHANGELOG.md`](CHANGELOG.md) for security, deployment, and benchmark notes.
 
 This project contains:
 
@@ -236,23 +236,23 @@ Check connectivity from pi with:
 The example SearXNG `settings.yml` enables JSON results and keeps a small engine set that tested well from this Docker/container environment:
 
 ```text
-bing, mojeek, yep, wiby, wikipedia, github, arxiv, pypi
+bing, mojeek, yep, mwmbl, wiby, wikipedia, github, arxiv, pypi
 ```
 
 Operational notes from testing on a new OCI datacenter IP (2026-07-10):
 
-- `bing`, `mojeek`, `yep`, and `wiby` returned results during the initial test.
+- `bing`, `mojeek`, `yep`, `mwmbl`, and `wiby` returned results during testing; Mwmbl and Wiby have much smaller indexes.
 - `brave` returned HTTP 429, `duckduckgo` and `startpage` returned CAPTCHA, `qwant` denied access, and `yahoo` had protocol errors.
 - `google` is marked inactive and `stackexchange` was not available in the tested SearXNG 2026.7.9 image.
 - Upstream behavior is IP- and time-dependent. Even currently working scraping engines may later block a datacenter IP; use an official API provider as the primary source for reliable production use.
 
-The wrapper defaults to a single `mojeek` engine because category-wide aggregation returned empty result sets when other engines failed. Override it without rebuilding:
+The wrapper uses `mojeek,yep,bing,mwmbl,wiby` as a **sequential fallback chain** because category-wide aggregation returned empty result sets when blocked engines participated. It stops after the first non-empty response, reducing upstream traffic and CAPTCHA pressure. Override the chain without rebuilding:
 
 ```bash
-SEARXNG_DEFAULT_ENGINES=yep docker compose up -d
+SEARXNG_DEFAULT_ENGINES=yep,bing,mwmbl,wiby docker compose up -d
 ```
 
-Callers can always override the default with the `engines` tool parameter.
+Callers can always override this behavior with the `engines` tool parameter; an explicit comma-separated value uses SearXNG's normal aggregation.
 
 ## Nginx Proxy Manager / proxynet deployment
 

@@ -6,7 +6,8 @@ use_default_settings:
   engines:
     # Keep the default engine list small and reliable for agent use.
     # Observed from a new OCI datacenter IP on 2026-07-10:
-    # - Bing, Mojeek, Yep, and Wiby returned results.
+    # - Bing, Mojeek, Yep, Wiby, and Mwmbl returned results. Mwmbl and
+    #   Wiby have much smaller independent indexes.
     # - Brave returned 429, DuckDuckGo/Startpage returned CAPTCHA,
     #   Qwant denied access, and Yahoo had protocol errors.
     # - Scraping-based engines can change behavior at any time. Use an
@@ -15,6 +16,7 @@ use_default_settings:
       - bing
       - mojeek
       - yep
+      - mwmbl
       - wiby
       - wikipedia
       - github

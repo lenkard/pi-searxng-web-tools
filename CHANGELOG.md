@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.2.0 - 2026-07-10
+
+### Compatibility
+
+- Migrated the Pi extension SDK import and peer dependency to `@earendil-works/pi-coding-agent >=0.80.0`.
+- Updated notification severity and tool error signaling for the current extension contract.
+
+### Search reliability
+
+- Updated the SearXNG engine set from tests on a new OCI datacenter IP.
+- Added a configurable sequential fallback chain (`mojeek,yep,bing,wiby`) instead of fragile category-wide aggregation.
+- Added selected/attempted engine metadata and upstream failure diagnostics.
+- Added `SEARCH-PROVIDER-PLAN.md` with current provider research and a hybrid architecture recommendation.
+
 ## v1.1.0 - 2026-05-05
 
 ### Security

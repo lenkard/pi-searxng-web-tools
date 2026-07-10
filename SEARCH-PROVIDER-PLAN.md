@@ -11,6 +11,7 @@ A one-day-old OCI IP did not make scraping-based search reliable. In the first c
 | Bing | Working initially |
 | Mojeek | Working initially, then temporarily suspended after repeated tests |
 | Yep | Working |
+| Mwmbl | Working, but a small independent index |
 | Wiby | Working, but a small/independent index |
 | Brave | HTTP 429 |
 | DuckDuckGo | CAPTCHA |
@@ -56,6 +57,25 @@ Each source needs its own rate-limit policy and attribution compliance.
 5. **SearXNG last fallback**, using only engines currently healthy on this server.
 
 If Exa's free-tier terms do not fit the project after account verification, invert steps 1 and 3: Brave primary, Tavily for deep research, SearXNG fallback.
+
+## What Pi and other agent projects are doing
+
+The current Pi ecosystem generally uses provider APIs and fallback chains rather than relying on one self-hosted scraper:
+
+- [`pi-web-access`](https://github.com/nicobailon/pi-web-access) routes among OpenAI/Codex search, Exa MCP, Brave, Parallel, Tavily, Perplexity, and Gemini. It uses normal HTTP extraction first, then Jina Reader/provider extraction for blocked or JavaScript-heavy pages.
+- [`pi-search-hub`](https://github.com/ronnieops/pi-search-hub) supports SearXNG alongside many hosted providers, sequential fallback, URL deduplication, and reciprocal-rank fusion.
+- [`pi-exa`](https://github.com/junnjiee/pi-exa) uses Exa's hosted MCP service for keyless search/fetch and reserves keyed APIs for deeper work.
+- [`pi-simple-web-tools`](https://github.com/jillesme/pi-simple-web-tools) uses Exa for discovery and direct HTTP/Readability for fetching, with Chromium only as a lazy fallback for JavaScript pages.
+- Provider-native agent tools from OpenAI, Anthropic, Gemini, and xAI perform search server-side and return citations/domain controls. The agent does not personally browse a consumer search-results page.
+- LangChain/CrewAI-style agents commonly integrate Tavily, Serper, Brave, or provider-native tools. Self-hosted UIs such as Open WebUI support SearXNG but also expose hosted providers because no-key search backends are frequently rate-limited.
+
+The common pattern is therefore: **search API or hosted index for discovery; direct HTTP extraction for ordinary pages; specialized reader/browser fallback only for difficult pages**.
+
+### Why Chromium is not the primary search solution
+
+Headless Chromium helps render a JavaScript application after a URL is known. It does not fix search-engine blocking from a datacenter ASN. Consumer search engines inspect IP reputation, cookies, request behavior, TLS/browser fingerprinting, and account state; automated Chromium can still receive CAPTCHA or suspension while consuming much more CPU and memory.
+
+Use Chromium selectively for content extraction, not to automate Google/Brave/DuckDuckGo result pages. Hosted search providers resolve the bot problem by operating an authorized API or their own crawl/index/proxy infrastructure. SearXNG cannot remove upstream anti-bot controls; it only coordinates engines.
 
 ## Proposed implementation
 
