@@ -48,7 +48,7 @@ const WebSearchParams = Type.Object({
 	pageno: Type.Optional(Type.Integer({ minimum: 1, default: 1, description: "Search result page number." })),
 	language: Type.Optional(Type.String({ default: "auto", description: "Language code, 'auto', or 'all'." })),
 	categories: Type.Optional(Type.String({ description: "Optional SearXNG categories, comma-separated, e.g. 'general,news'." })),
-	engines: Type.Optional(Type.String({ description: "Optional SearXNG engines, comma-separated, e.g. 'bing,github'." })),
+	engines: Type.Optional(Type.String({ description: "Optional SearXNG engines, comma-separated, e.g. 'google cse', 'github', or 'pypi'." })),
 	time_range: Type.Optional(Type.String({ description: "Optional time range: day, month, or year." })),
 	mode: Type.Optional(StringEnum(["fast", "balanced", "deep"] as const, { description: "Search strategy: fast uses the first usable free engine; balanced adds a second engine only for weak results; deep combines up to three free engines." })),
 });
@@ -66,7 +66,7 @@ export default function webSearchFetchExtension(pi: ExtensionAPI) {
 		promptSnippet: "Search the web using the local SearXNG-backed API",
 		promptGuidelines: [
 			"Use web_search when the user asks for current web information, internet research, recent docs, product pages, news, or URLs.",
-			"For focused technical searches, web_search can select github, pypi, arxiv, or wikipedia with the engines parameter instead of a general engine.",
+			"For focused technical searches, web_search can select google cse, github, pypi, arxiv, or wikipedia with the engines parameter instead of another general engine.",
 			"After web_search finds a likely source, use web_fetch to retrieve the page text when details or citations are needed.",
 		],
 		parameters: WebSearchParams,

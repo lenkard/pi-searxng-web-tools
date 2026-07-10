@@ -4,6 +4,7 @@ use_default_settings:
     # Scraping-based engines can still degrade or block the IP over time; an API
     # provider should be the long-term primary and SearXNG the fallback.
     keep_only:
+      - google cse
       - bing
       - mojeek
       - yep

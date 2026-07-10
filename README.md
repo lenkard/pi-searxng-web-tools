@@ -2,7 +2,7 @@
 
 Self-hosted web search and web page extraction for the [pi coding agent](https://github.com/mariozechner/pi-coding-agent).
 
-Current release: `v1.2.1`. See [`CHANGELOG.md`](CHANGELOG.md) for security, deployment, and benchmark notes.
+Current release: `v1.2.2`. See [`CHANGELOG.md`](CHANGELOG.md) for security, deployment, and benchmark notes.
 
 This project contains:
 
@@ -112,7 +112,7 @@ pi install git:github.com/lenkard/pi-searxng-web-tools
 Or pin to a release tag:
 
 ```bash
-pi install git:github.com/lenkard/pi-searxng-web-tools@v1.2.1
+pi install git:github.com/lenkard/pi-searxng-web-tools@v1.2.2
 ```
 
 Or install it only for the current project:
@@ -237,17 +237,18 @@ Check connectivity from pi with:
 The example SearXNG `settings.yml` enables JSON results and keeps a small engine set that tested well from this Docker/container environment:
 
 ```text
-bing, mojeek, yep, mwmbl, wiby, wikipedia, github, arxiv, pypi
+google cse, bing, mojeek, yep, mwmbl, wiby, wikipedia, github, arxiv, pypi
 ```
 
 Operational notes from testing on a new OCI datacenter IP (2026-07-10):
 
-- `bing`, `mojeek`, `yep`, `mwmbl`, and `wiby` returned results during testing; Mwmbl and Wiby have much smaller indexes.
+- `google cse`, `bing`, `mojeek`, `yep`, `mwmbl`, and `wiby` returned results during testing. Google CSE gave the strongest technical result set; Mwmbl and Wiby have much smaller indexes.
+- `google cse` uses SearXNG's keyless CSE engine with a shared public search-engine identifier. It is not the official metered Custom Search JSON API and may still be rate-limited.
 - `brave` returned HTTP 429, `duckduckgo` and `startpage` returned CAPTCHA, `qwant` denied access, and `yahoo` had protocol errors.
-- `google` is marked inactive and `stackexchange` was not available in the tested SearXNG 2026.7.9 image.
+- The direct `google` scraper is marked inactive and `stackexchange` was not available in the tested SearXNG 2026.7.9 image.
 - Upstream behavior is IP- and time-dependent. Even currently working scraping engines may later block a datacenter IP; use an official API provider as the primary source for reliable production use.
 
-The wrapper uses `mojeek,yep,bing,mwmbl,wiby` as a **sequential fallback chain** because category-wide aggregation returned empty result sets when blocked engines participated. It stops after the first non-empty response, reducing upstream traffic and CAPTCHA pressure. Override the chain without rebuilding:
+The wrapper uses `google cse,mojeek,yep,bing,mwmbl,wiby` as a **sequential fallback chain** because category-wide aggregation returned empty result sets when blocked engines participated. It stops after the first non-empty response, reducing upstream traffic and CAPTCHA pressure. Override the chain without rebuilding:
 
 ```bash
 SEARXNG_DEFAULT_ENGINES=yep,bing,mwmbl,wiby docker compose up -d

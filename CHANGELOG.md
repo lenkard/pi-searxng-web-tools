@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.2.2 - 2026-07-10
+
+### Search engines
+
+- Enabled SearXNG's keyless `google cse` engine after successful OCI testing.
+- Made Google CSE the first adaptive fallback because it returned substantially stronger technical results than the other free engines.
+- Kept automatic fallback and cooldown behavior because the shared CSE endpoint can still be rate-limited.
+
 ## v1.2.1 - 2026-07-10
 
 ### Packaging

@@ -10,6 +10,7 @@ A one-day-old OCI IP did not make scraping-based search reliable. In the first c
 
 | SearXNG engine | Result |
 |---|---|
+| Google CSE | Working with the strongest technical relevance; keyless shared CSE endpoint, not the official JSON API |
 | Bing | Working initially |
 | Mojeek | Working initially, then temporarily suspended after repeated tests |
 | Yep | Working |

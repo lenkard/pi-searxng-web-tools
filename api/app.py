@@ -13,7 +13,7 @@ import trafilatura
 from bs4 import BeautifulSoup
 
 SEARXNG_URL = os.getenv("SEARXNG_URL", "http://searxng:8080/search")
-SEARXNG_DEFAULT_ENGINES = os.getenv("SEARXNG_DEFAULT_ENGINES", "mojeek,yep,bing,mwmbl,wiby").strip()
+SEARXNG_DEFAULT_ENGINES = os.getenv("SEARXNG_DEFAULT_ENGINES", "google cse,mojeek,yep,bing,mwmbl,wiby").strip()
 SEARCH_CACHE_TTL_SECONDS = max(0, int(os.getenv("SEARCH_CACHE_TTL_SECONDS", "900")))
 ENGINE_COOLDOWN_SECONDS = max(10, int(os.getenv("ENGINE_COOLDOWN_SECONDS", "300")))
 BALANCED_QUALITY_THRESHOLD = min(1.0, max(0.0, float(os.getenv("BALANCED_QUALITY_THRESHOLD", "0.58"))))

@@ -6,13 +6,15 @@ use_default_settings:
   engines:
     # Keep the default engine list small and reliable for agent use.
     # Observed from a new OCI datacenter IP on 2026-07-10:
-    # - Bing, Mojeek, Yep, Wiby, and Mwmbl returned results. Mwmbl and
-    #   Wiby have much smaller independent indexes.
+    # - Google CSE, Bing, Mojeek, Yep, Wiby, and Mwmbl returned results.
+    #   Google CSE gave the best technical relevance in the OCI test, while
+    #   Mwmbl and Wiby have much smaller independent indexes.
     # - Brave returned 429, DuckDuckGo/Startpage returned CAPTCHA,
     #   Qwant denied access, and Yahoo had protocol errors.
     # - Scraping-based engines can change behavior at any time. Use an
     #   official search API as the long-term primary and SearXNG as fallback.
     keep_only:
+      - google cse
       - bing
       - mojeek
       - yep
