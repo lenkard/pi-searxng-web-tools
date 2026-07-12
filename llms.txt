@@ -3,7 +3,7 @@
 Self-hosted search and readable-page extraction for the pi coding agent.
 
 Repository: https://github.com/lenkard/pi-searxng-web-tools
-Current release: v1.5.3
+Current release: v1.5.4
 
 ## Components
 
@@ -31,7 +31,7 @@ General engines are health-checked every 15 minutes. Google-backed CSEs share on
 cp .env.example .env
 # set a generated SEARXNG_SECRET in .env
 docker compose up -d --build
-pi install git:github.com/lenkard/pi-searxng-web-tools@v1.5.3
+pi install git:github.com/lenkard/pi-searxng-web-tools@v1.5.4
 # restart pi or run /reload
 ```
 

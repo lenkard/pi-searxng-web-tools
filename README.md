@@ -2,7 +2,7 @@
 
 Self-hosted web search and web page extraction for the [pi coding agent](https://github.com/mariozechner/pi-coding-agent).
 
-Current release: `v1.5.3`. See [`CHANGELOG.md`](CHANGELOG.md) for security, deployment, and benchmark notes.
+Current release: `v1.5.4`. See [`CHANGELOG.md`](CHANGELOG.md) for security, deployment, and benchmark notes.
 
 This project contains:
 
@@ -114,7 +114,7 @@ pi install git:github.com/lenkard/pi-searxng-web-tools
 Or pin to a release tag:
 
 ```bash
-pi install git:github.com/lenkard/pi-searxng-web-tools@v1.5.3
+pi install git:github.com/lenkard/pi-searxng-web-tools@v1.5.4
 ```
 
 Or install it only for the current project:

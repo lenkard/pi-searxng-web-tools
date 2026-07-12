@@ -57,6 +57,18 @@ class SearchLogicTests(unittest.TestCase):
         self.assertEqual(app._effective_status("cse reddit"), "degraded")
         app.ENGINE_HEALTH.clear()
 
+    def test_persisted_cse_rate_limit_restores_shared_cooldown(self):
+        app.ENGINE_HEALTH.clear()
+        app.ENGINE_COOLDOWNS.clear()
+        app.ENGINE_HEALTH["cse reddit"] = {
+            "status": "rate_limited", "retry_after": time.time() + 300,
+            "last_error": "too many requests",
+        }
+        app._restore_cse_cooldown()
+        self.assertTrue(app._is_temporarily_unavailable("cse documents"))
+        app.ENGINE_HEALTH.clear()
+        app.ENGINE_COOLDOWNS.clear()
+
     def test_cse_probe_rotation_selects_only_oldest_when_slot_is_due(self):
         app.ENGINE_HEALTH.clear()
         app.ENGINE_COOLDOWNS.clear()

@@ -159,6 +159,7 @@ def load_health() -> None:
         data = json.loads(_health_path().read_text())
         if isinstance(data, dict):
             ENGINE_HEALTH.update(data)
+            _restore_cse_cooldown()
         log.info("loaded engine health state for %d engines", len(ENGINE_HEALTH))
     except FileNotFoundError:
         pass
@@ -179,6 +180,18 @@ def save_health() -> None:
 
 def is_google_cse(engine: str) -> bool:
     return engine == "google cse" or engine.startswith("cse ")
+
+
+def _restore_cse_cooldown() -> None:
+    active = [
+        (float(state.get("retry_after") or 0), str(state.get("last_error") or "rate limited"))
+        for name, state in ENGINE_HEALTH.items()
+        if is_google_cse(name) and state.get("status") == "rate_limited"
+    ]
+    if active:
+        retry_after, reason = max(active)
+        if retry_after > time.time():
+            ENGINE_COOLDOWNS["google cse"] = (time.monotonic() + retry_after - time.time(), reason)
 
 
 def broken_engines() -> list[str]:
@@ -326,7 +339,7 @@ async def lifespan(_app: FastAPI):
         save_health()
 
 
-app = FastAPI(title="Private Web Search/Fetch API", version="1.5.3", lifespan=lifespan)
+app = FastAPI(title="Private Web Search/Fetch API", version="1.5.4", lifespan=lifespan)
 
 
 class SearchBody(BaseModel):

@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.5.4 - 2026-07-12
+
+### Fixed
+
+- Restored the shared Google-CSE cooldown from persisted health state on startup, so restarting the API cannot bypass an active upstream backoff.
+
 ## v1.5.3 - 2026-07-12
 
 ### Fixed
