@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased (v1.5.0)
+## v1.5.0 - 2026-07-12
 
 ### Engine health monitoring and resilience
 
