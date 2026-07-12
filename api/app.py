@@ -265,7 +265,12 @@ async def _probe_loop() -> None:
                     continue
                 await _probe_one(engine)
                 probed += 1
-                await asyncio.sleep(PROBE_STAGGER_SECONDS)
+                # Stagger only Google-CSE-type engines (shared residential
+                # egress IP). General engines are independent providers —
+                # probe back-to-back so the default-chain backbone classifies
+                # within seconds instead of waiting through a full sweep.
+                if engine.startswith("cse ") or engine == "google cse":
+                    await asyncio.sleep(PROBE_STAGGER_SECONDS)
             if probed:
                 log.info("PROBE swept=%d engines", probed)
                 save_health()
