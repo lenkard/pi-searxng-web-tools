@@ -31,7 +31,7 @@ services:
     environment:
       SEARXNG_URL: http://searxng:8080/search
       # Sequential fallback chain; callers may still pass an engines parameter.
-      SEARXNG_DEFAULT_ENGINES: ${SEARXNG_DEFAULT_ENGINES:-google cse,mojeek,yep,bing,mwmbl,wiby}
+      SEARXNG_DEFAULT_ENGINES: ${SEARXNG_DEFAULT_ENGINES:-bing,yep,mwmbl,wiby}
       SEARCH_CACHE_TTL_SECONDS: ${SEARCH_CACHE_TTL_SECONDS:-900}
       ENGINE_COOLDOWN_SECONDS: ${ENGINE_COOLDOWN_SECONDS:-300}
       BALANCED_QUALITY_THRESHOLD: ${BALANCED_QUALITY_THRESHOLD:-0.58}

@@ -2,7 +2,7 @@
 
 Self-hosted web search and web page extraction for the [pi coding agent](https://github.com/mariozechner/pi-coding-agent).
 
-Current release: `v1.2.2`. See [`CHANGELOG.md`](CHANGELOG.md) for security, deployment, and benchmark notes.
+Current release: `v1.5.2`. See [`CHANGELOG.md`](CHANGELOG.md) for security, deployment, and benchmark notes.
 
 This project contains:
 
@@ -29,6 +29,8 @@ FastAPI wrapper:
 
 ```text
 GET  /health
+GET  /engines
+GET  /engines/health
 GET  /websearch?q=searxng&max_results=5&language=auto
 POST /websearch
 GET  /webfetch?url=https://example.com&max_chars=20000
@@ -112,7 +114,7 @@ pi install git:github.com/lenkard/pi-searxng-web-tools
 Or pin to a release tag:
 
 ```bash
-pi install git:github.com/lenkard/pi-searxng-web-tools@v1.2.2
+pi install git:github.com/lenkard/pi-searxng-web-tools@v1.5.2
 ```
 
 Or install it only for the current project:
@@ -177,10 +179,10 @@ You need both parts:
 The extension defaults to this API base URL:
 
 ```text
-http://172.17.0.1:8889
+http://172.25.0.7:8889
 ```
 
-This default is useful when pi runs inside a Docker container. In that case, `localhost` means "inside the pi container", not the Docker host. `172.17.0.1` is commonly the Docker bridge gateway that lets the pi container reach services published on the Docker host.
+This repository's default points to the private Kinkaid deployment over WireGuard. Override it for any other installation with `PI_WEB_API_BASE_URL`.
 
 If pi runs directly on the same host as Docker, use localhost instead:
 
@@ -237,7 +239,7 @@ Check connectivity from pi with:
 The example SearXNG `settings.yml` enables JSON results and keeps a small engine set that tested well from this Docker/container environment:
 
 ```text
-google cse, bing, mojeek, yep, mwmbl, wiby, wikipedia, github, arxiv, pypi
+bing, yep, mwmbl, wiby, wikipedia, github, arxiv, crossref, gitlab, github code, hackernews, openalex, reddit, stackoverflow, semantic scholar, mojeek, google cse
 ```
 
 Additional bot-friendly engines enabled for explicit selection:
@@ -256,10 +258,10 @@ Operational notes from testing on a new OCI datacenter IP (2026-07-10):
 - The direct `google` scraper is marked inactive and `stackexchange` was not available in the tested SearXNG 2026.7.9 image.
 - Upstream behavior is IP- and time-dependent. Even currently working scraping engines may later block a datacenter IP; use an official API provider as the primary source for reliable production use.
 
-The wrapper uses `google cse,mojeek,yep,bing,mwmbl,wiby` as a **sequential fallback chain** because category-wide aggregation returned empty result sets when blocked engines participated. It stops after the first non-empty response, reducing upstream traffic and CAPTCHA pressure. Override the chain without rebuilding:
+The wrapper uses `bing,yep,mwmbl,wiby` as a **sequential fallback chain**. Google CSE remains available for focused and explicit searches but is not routine default traffic because all CSEs share one Google-facing residential IP. Override the chain without rebuilding:
 
 ```bash
-SEARXNG_DEFAULT_ENGINES=yep,bing,mwmbl,wiby docker compose up -d
+SEARXNG_DEFAULT_ENGINES=bing,yep,mwmbl,wiby docker compose up -d
 ```
 
 Callers can always override this behavior with the `engines` tool parameter; an explicit comma-separated value uses SearXNG's normal aggregation.
@@ -270,7 +272,9 @@ Free search modes:
 - `balanced` (default) scores relevance and domain diversity, querying one additional free engine only when the first response is weak.
 - `deep` combines up to three free engines using URL deduplication and reciprocal-rank fusion.
 
-The wrapper caches successful searches for 15 minutes by default and temporarily cools down engines that return CAPTCHA, 429, suspension, or access-denied diagnostics. Configure these controls with `SEARCH_CACHE_TTL_SECONDS`, `ENGINE_COOLDOWN_SECONDS`, and `BALANCED_QUALITY_THRESHOLD`.
+The wrapper caches successful searches for 15 minutes by default and temporarily cools down engines that return CAPTCHA, 429, suspension, or access-denied diagnostics. A CSE rate limit cools the shared Google-CSE group. Automatic routing skips unavailable engines and falls back to the default chain.
+
+Engine health is available from `/engines/health`. General engines are checked every 15 minutes. The 30 Google-backed CSE engines are rotated one at a time across a two-hour interval—roughly one probe every four minutes—so monitoring does not create a burst. Real searches also update health. Configure these controls with `SEARCH_CACHE_TTL_SECONDS`, `ENGINE_COOLDOWN_SECONDS`, `BALANCED_QUALITY_THRESHOLD`, `PROBE_INTERVAL_GENERAL`, and `PROBE_INTERVAL_CSE`.
 
 No Codex/OpenAI search is used, so searches do not consume the user's Codex allowance.
 

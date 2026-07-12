@@ -1,95 +1,57 @@
 # Pi SearXNG Web Tools
 
-This repository provides self-hosted web search and web page text extraction tools for the pi coding agent.
+Self-hosted search and readable-page extraction for the pi coding agent.
 
 Repository: https://github.com/lenkard/pi-searxng-web-tools
+Current release: v1.5.2
 
-## Main purpose
+## Components
 
-Run SearXNG plus a FastAPI wrapper and install a pi extension that registers two tools:
+- `searxng`: patched SearXNG service on port 8888
+- `api/app.py`: FastAPI search/fetch wrapper on port 8889
+- `pi-extension/web-search-fetch.ts`: registers `web_search` and `web_fetch`
+- `searxng/settings.yml`: committed engine-list source of truth; secrets stay in ignored `.env`
 
-- `web_search`: searches the web through SearXNG JSON API
-- `web_fetch`: fetches a URL and extracts readable page text using httpx + trafilatura
-
-## Important files
-
-- `README.md`: human-facing setup and usage documentation
-- `docker-compose.yml`: starts SearXNG and the FastAPI wrapper
-- `searxng/settings.yml.example`: example SearXNG config with JSON format enabled and a small reliable engine set
-- `api/app.py`: FastAPI wrapper implementation
-- `api/Dockerfile`: container image for the wrapper
-- `api/requirements.txt`: Python dependencies
-- `pi-extension/web-search-fetch.ts`: pi extension registering `web_search` and `web_fetch`
-- `install-extension.sh`: copies the pi extension to `~/.pi/agent/extensions/`
-- `package.json`: pi package manifest; `pi.extensions` points to `./pi-extension/web-search-fetch.ts`
-
-## Runtime ports
-
-- SearXNG UI/API: `http://localhost:8888`
-- FastAPI wrapper: `http://localhost:8889`
-
-## FastAPI endpoints
+## API
 
 - `GET /health`
-- `GET /websearch?q=<query>&max_results=10&language=auto`
-- `POST /websearch`
-- `GET /webfetch?url=<url>&max_chars=20000`
-- `POST /webfetch`
+- `GET /engines`
+- `GET /engines/health`
+- `GET|POST /websearch`
+- `GET|POST /webfetch`
 - Compatibility aliases: `/api/web_search` and `/api/web_fetch`
 
-## Pi package install
+Search supports `fast`, `balanced`, and `deep` modes plus `engines=auto` intent routing. The safe sequential default is `bing,yep,mwmbl,wiby`. Google CSE remains available for focused searches.
 
-Install as a pi package:
+General engines are health-checked every 15 minutes. Google-backed CSEs share one residential egress IP, so the monitor rotates one CSE at a time across two hours instead of issuing a burst. A CSE rate limit cools the shared group, and automatic routing falls back to the safe default chain.
 
-```bash
-pi install git:github.com/lenkard/pi-searxng-web-tools
-```
-
-The pi package installs only the extension. The Docker/FastAPI endpoint must be running separately and reachable.
-
-## Pi extension behavior
-
-Docker Compose binds published ports to `127.0.0.1` by default. If pi runs in another Docker container, set `WEB_API_BIND=172.17.0.1` or another private bridge/VPN IP rather than `0.0.0.0`. The extension defaults to API base URL:
-
-```text
-http://172.17.0.1:8889
-```
-
-Override with:
+## Install
 
 ```bash
-PI_WEB_API_BASE_URL=http://localhost:8889 pi
-```
-
-The default is useful when pi runs inside a container and Docker publishes the wrapper on the host. If pi runs directly on the Docker host, use `PI_WEB_API_BASE_URL=http://localhost:8889`.
-
-Optional auth: set `WEB_API_KEY` on the FastAPI service and `PI_WEB_API_KEY` for pi. The extension sends the key as `X-API-Key`.
-
-## Recommended engines
-
-The example SearXNG config keeps these engines only:
-
-```text
-bing, github, stackoverflow, mdn, wikipedia, arxiv, pypi
-```
-
-This avoids common CAPTCHA/403/429 noise from DuckDuckGo, Brave, Startpage and Mojeek on container/datacenter IPs.
-
-## Security notes
-
-- Compose binds ports to localhost by default; use `WEB_API_BIND=<private-ip>` for container-to-host access.
-- Optional FastAPI shared-key auth is available with `WEB_API_KEY` / `PI_WEB_API_KEY`.
-- SearXNG `server.secret_key` is not an API password.
-- Do not expose ports `8888` or `8889` publicly without auth/rate limiting.
-- `/webfetch` can fetch arbitrary URLs; public exposure can create SSRF/open-proxy risk.
-- Do not commit real `searxng/settings.yml`; it contains `server.secret_key`.
-
-## Minimal setup
-
-```bash
-cp searxng/settings.yml.example searxng/settings.yml
-# edit searxng/settings.yml and replace secret_key
+cp .env.example .env
+# set a generated SEARXNG_SECRET in .env
 docker compose up -d --build
-./install-extension.sh
+pi install git:github.com/lenkard/pi-searxng-web-tools@v1.5.2
 # restart pi or run /reload
 ```
+
+The pi package installs only the extension; Docker services must run separately. The extension defaults to the private Kinkaid WireGuard endpoint `http://172.25.0.7:8889`. Other deployments must set `PI_WEB_API_BASE_URL`.
+
+Optional auth uses `WEB_API_KEY` on the API and `PI_WEB_API_KEY` in pi.
+
+## Validation
+
+Use only the paced routine benchmark:
+
+```bash
+python3 scripts/benchmark.py
+```
+
+Do not repeatedly bulk-test CSEs; their Google traffic shares one egress IP.
+
+## Security
+
+- Ports bind to localhost by default; use only a private bridge/VPN bind when remote access is needed.
+- Do not expose ports 8888 or 8889 publicly without authentication and rate limiting.
+- `web_fetch` rejects non-global IPv4/IPv6 destinations and checks every redirect hop.
+- Never commit `.env`; `server.secret_key` comes from `SEARXNG_SECRET`.

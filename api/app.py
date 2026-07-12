@@ -28,7 +28,7 @@ logging.basicConfig(
 log = logging.getLogger("webfetch-api")
 
 SEARXNG_URL = os.getenv("SEARXNG_URL", "http://searxng:8080/search")
-SEARXNG_DEFAULT_ENGINES = os.getenv("SEARXNG_DEFAULT_ENGINES", "google cse,mojeek,yep,bing,mwmbl,wiby").strip()
+SEARXNG_DEFAULT_ENGINES = os.getenv("SEARXNG_DEFAULT_ENGINES", "bing,yep,mwmbl,wiby").strip()
 SEARCH_CACHE_TTL_SECONDS = max(0, int(os.getenv("SEARCH_CACHE_TTL_SECONDS", "900")))
 ENGINE_COOLDOWN_SECONDS = max(10, int(os.getenv("ENGINE_COOLDOWN_SECONDS", "300")))
 BALANCED_QUALITY_THRESHOLD = min(1.0, max(0.0, float(os.getenv("BALANCED_QUALITY_THRESHOLD", "0.58"))))
@@ -42,22 +42,11 @@ WEB_API_KEY = os.getenv("WEB_API_KEY", "")
 # deployments that must fetch internal addresses.
 WEB_FETCH_ALLOW_PRIVATE = os.getenv("WEB_FETCH_ALLOW_PRIVATE", "false").lower() in ("1", "true", "yes")
 
-_BLOCKED_V4 = [ipaddress.ip_network(n) for n in (
-    "0.0.0.0/8", "10.0.0.0/8", "100.64.0.0/10", "127.0.0.0/8", "169.254.0.0/16",
-    "172.16.0.0/12", "192.0.2.0/24", "192.168.0.0/16", "198.18.0.0/15",
-    "224.0.0.0/4", "240.0.0.0/4",
-)]
-_BLOCKED_V6 = [ipaddress.ip_network(n) for n in (
-    "::1/128", "fc00::/7", "fe80::/10", "::ffff:0:0/96",
-)]
-
-
-def _is_blocked_ip(addr) -> bool:
+def _is_blocked_ip(addr: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
     # IPv4-mapped IPv6 (::ffff:a.b.c.d) is a classic bypass; check the v4 form.
     if isinstance(addr, ipaddress.IPv6Address) and addr.ipv4_mapped is not None:
         addr = addr.ipv4_mapped
-    networks = _BLOCKED_V4 if isinstance(addr, ipaddress.IPv4Address) else _BLOCKED_V6
-    return any(addr in net for net in networks)
+    return not addr.is_global or addr.is_multicast
 
 
 def assert_safe_host(host: str) -> None:
@@ -155,7 +144,6 @@ PROBE_QUERY = os.getenv("PROBE_QUERY", "open source software")
 PROBE_INTERVAL_GENERAL = max(60, int(os.getenv("PROBE_INTERVAL_GENERAL", "900")))
 PROBE_INTERVAL_CSE = max(300, int(os.getenv("PROBE_INTERVAL_CSE", "7200")))
 PROBE_TICK_SECONDS = max(30, int(os.getenv("PROBE_TICK_SECONDS", "60")))
-PROBE_STAGGER_SECONDS = max(1, int(os.getenv("PROBE_STAGGER_SECONDS", "3")))
 PROBE_STARTUP_DELAY = max(0, int(os.getenv("PROBE_STARTUP_DELAY", "30")))
 ENGINE_BROKEN_THRESHOLD = max(1, int(os.getenv("ENGINE_BROKEN_THRESHOLD", "3")))
 
@@ -189,8 +177,30 @@ def save_health() -> None:
         log.warning("could not save engine health state: %s", error)
 
 
+def is_google_cse(engine: str) -> bool:
+    return engine == "google cse" or engine.startswith("cse ")
+
+
 def broken_engines() -> list[str]:
-    return sorted(name for name, state in ENGINE_HEALTH.items() if state.get("status") == "broken")
+    return sorted(
+        name for name, state in ENGINE_HEALTH.items()
+        if name in ALLOWED_ENGINES and state.get("status") == "broken"
+    )
+
+
+def _is_temporarily_unavailable(engine: str, now: Optional[float] = None) -> bool:
+    state = ENGINE_HEALTH.get(engine) or {}
+    if state.get("status") == "broken":
+        return True
+    if state.get("status") == "rate_limited" and float(state.get("retry_after") or 0) > (now or time.time()):
+        return True
+    group_cooldown = ENGINE_COOLDOWNS.get("google cse") if is_google_cse(engine) else None
+    return bool(group_cooldown and group_cooldown[0] > time.monotonic())
+
+
+def _available_engines(engines: list[str]) -> tuple[list[str], list[str]]:
+    unavailable = [engine for engine in engines if _is_temporarily_unavailable(engine)]
+    return [engine for engine in engines if engine not in unavailable], unavailable
 
 
 def _unresponsive_reason(engine: str, unresponsive: list[Any]) -> Optional[str]:
@@ -211,22 +221,24 @@ def _record_probe(engine: str, failed: bool, reason: Optional[str], latency_ms: 
     if not failed:
         previous = state.get("status")
         state.update(status="healthy", last_success=now, latency_ms=latency_ms,
-                     consecutive_failures=0, last_error=None)
+                     consecutive_failures=0, last_error=None, retry_after=None)
         if previous in ("broken", "rate_limited", "degraded", "unknown"):
             log.info("ENGINE_RECOVER engine=%s prev=%s", engine, previous)
         return
-    state["consecutive_failures"] = int(state.get("consecutive_failures", 0)) + 1
     state["last_error"] = reason
     is_rate_limit = bool(reason) and cooldown_reason([reason]) is not None
     log.warning("ENGINE_FAIL engine=%s reason=%s", engine, reason)
     if is_rate_limit:
         state["status"] = "rate_limited"
-    elif state["consecutive_failures"] >= ENGINE_BROKEN_THRESHOLD:
+        state["retry_after"] = now + ENGINE_COOLDOWN_SECONDS
+    else:
+        state["consecutive_failures"] = int(state.get("consecutive_failures", 0)) + 1
+    if not is_rate_limit and state["consecutive_failures"] >= ENGINE_BROKEN_THRESHOLD:
         if state.get("status") != "broken":
             log.warning("ENGINE_BROKEN engine=%s failures=%s reason=%s",
                         engine, state["consecutive_failures"], reason)
         state["status"] = "broken"
-    else:
+    elif not is_rate_limit:
         state["status"] = "degraded"
 
 
@@ -250,6 +262,21 @@ async def _probe_one(engine: str) -> None:
         failed = True
         reason = f"probe error: {error}"
     _record_probe(engine, failed, reason, latency_ms)
+    if failed and reason and is_google_cse(engine) and cooldown_reason([reason]):
+        ENGINE_COOLDOWNS["google cse"] = (time.monotonic() + ENGINE_COOLDOWN_SECONDS, reason)
+
+
+def _next_cse_probe(now: float) -> Optional[str]:
+    cses = sorted(e for e in ALLOWED_ENGINES if is_google_cse(e))
+    if not cses:
+        return None
+    cooldown = ENGINE_COOLDOWNS.get("google cse")
+    if cooldown and cooldown[0] > time.monotonic():
+        return None
+    last_probe = max(((ENGINE_HEALTH.get(e) or {}).get("last_check", 0) for e in cses), default=0)
+    if now - last_probe < PROBE_INTERVAL_CSE / len(cses):
+        return None
+    return min(cses, key=lambda e: (ENGINE_HEALTH.get(e) or {}).get("last_check", 0))
 
 
 async def _probe_loop() -> None:
@@ -257,29 +284,24 @@ async def _probe_loop() -> None:
     while True:
         try:
             now = time.time()
-            # Probe general engines FIRST, back-to-back (independent
-            # providers, no shared IP) so the default-chain backbone
-            # classifies within seconds of startup. CSEs share one Google
-            # residential egress IP and must be staggered — probe them after,
-            # so a rate-limited CSE block can't delay general classification.
-            general = sorted(e for e in ALLOWED_ENGINES if not (e.startswith("cse ") or e == "google cse"))
-            cses = sorted(e for e in ALLOWED_ENGINES if e.startswith("cse ") or e == "google cse")
             probed = 0
-            for engine in general:
+            for engine in sorted(e for e in ALLOWED_ENGINES if not is_google_cse(e)):
                 last = (ENGINE_HEALTH.get(engine) or {}).get("last_check", 0)
-                if now - last < PROBE_INTERVAL_GENERAL:
+                cooldown = ENGINE_COOLDOWNS.get(engine)
+                if now - last < PROBE_INTERVAL_GENERAL or (cooldown and cooldown[0] > time.monotonic()):
                     continue
                 await _probe_one(engine)
                 probed += 1
-            for engine in cses:
-                last = (ENGINE_HEALTH.get(engine) or {}).get("last_check", 0)
-                if now - last < PROBE_INTERVAL_CSE:
-                    continue
-                await _probe_one(engine)
+
+            # CSEs share one Google-facing residential IP. Rotate one engine
+            # across the full interval instead of repeating a burst sweep.
+            cse = _next_cse_probe(now)
+            if cse:
+                await _probe_one(cse)
                 probed += 1
-                await asyncio.sleep(PROBE_STAGGER_SECONDS)
+
             if probed:
-                log.info("PROBE swept=%d engines", probed)
+                log.info("PROBE checked=%d engines", probed)
                 save_health()
         except asyncio.CancelledError:
             raise
@@ -304,7 +326,7 @@ async def lifespan(_app: FastAPI):
         save_health()
 
 
-app = FastAPI(title="Private Web Search/Fetch API", version="1.4.0", lifespan=lifespan)
+app = FastAPI(title="Private Web Search/Fetch API", version="1.5.2", lifespan=lifespan)
 
 
 class SearchBody(BaseModel):
@@ -473,17 +495,20 @@ async def do_search(body: SearchBody, request: Request):
     if body.max_results < 1 or body.max_results > 50:
         raise HTTPException(status_code=400, detail="max_results must be between 1 and 50")
 
-    # Resolve "auto" keyword routing to a concrete engine set (or None -> default
-    # chain), excluding any chronically broken engines for resilience.
+    key = cache_key(body)
+    explicit_engines = body.engines not in (None, "auto")
+
+    # Auto routes are hints, not dead ends: unavailable focused engines are
+    # filtered and the safe default chain remains available as fallback.
+    auto_routed = False
     auto_excluded: list[str] = []
     if body.engines == "auto":
         routed = route_auto(body.q)
         if routed:
-            broken_now = broken_engines()
             wanted = [e.strip() for e in routed.split(",") if e.strip()]
-            auto_excluded = [e for e in wanted if e in broken_now]
-            kept = [e for e in wanted if e not in broken_now]
+            kept, auto_excluded = _available_engines(wanted)
             body.engines = ",".join(kept) if kept else None
+            auto_routed = bool(kept)
         else:
             body.engines = None
 
@@ -493,7 +518,6 @@ async def do_search(body: SearchBody, request: Request):
         if unknown_engines:
             raise HTTPException(status_code=400, detail=f"Unknown or disabled engines: {', '.join(unknown_engines)}")
 
-    key = cache_key(body)
     now = time.monotonic()
     cached = SEARCH_CACHE.get(key)
     if cached and now - cached[0] <= SEARCH_CACHE_TTL_SECONDS:
@@ -515,20 +539,24 @@ async def do_search(body: SearchBody, request: Request):
             base_params[param_name] = value
 
     # Explicit caller input keeps SearXNG's normal comma-separated aggregation.
-    # The configured default is a sequential fallback chain, avoiding a blocked
-    # engine poisoning a combined SearXNG response.
-    excluded_broken: list[str] = list(auto_excluded)
-    if body.engines:
+    # Defaults are a sequential fallback chain; auto routes try their focused
+    # engines first and then fall back to that chain.
+    full_chain = [engine.strip() for engine in SEARXNG_DEFAULT_ENGINES.split(",") if engine.strip()]
+    available_defaults, default_excluded = _available_engines(full_chain)
+    excluded_unavailable = list(dict.fromkeys(auto_excluded + default_excluded))
+    excluded_broken = [
+        engine for engine in excluded_unavailable
+        if (ENGINE_HEALTH.get(engine) or {}).get("status") == "broken"
+    ]
+    if explicit_engines:
         engine_attempts = [body.engines]
     else:
-        full_chain = [engine.strip() for engine in SEARXNG_DEFAULT_ENGINES.split(",") if engine.strip()]
-        excluded_broken = [engine for engine in full_chain if engine in broken_engines()]
-        engine_attempts = [engine for engine in full_chain if engine not in excluded_broken]
-    if not engine_attempts:
-        engine_attempts = [None]
+        engine_attempts = ([body.engines] if auto_routed and body.engines else []) + [
+            engine for engine in available_defaults if engine != body.engines
+        ]
 
     max_results = max(1, min(body.max_results, 50))
-    target_lists = 1 if body.engines or body.mode == "fast" else (2 if body.mode == "balanced" else 3)
+    target_lists = 1 if explicit_engines or body.mode == "fast" else (2 if body.mode == "balanced" else 3)
     result_lists: list[list[dict[str, Any]]] = []
     response_data: dict[str, Any] = {"query": body.q, "answers": [], "suggestions": []}
     selected_engines = []
@@ -540,18 +568,21 @@ async def do_search(body: SearchBody, request: Request):
     async with httpx.AsyncClient(timeout=30, headers=forwarded_client_headers(request)) as client:
         for engine in engine_attempts:
             engine_name = engine or "default"
-            cooldown = ENGINE_COOLDOWNS.get(engine_name)
+            names = [name.strip() for name in engine_name.split(",") if name.strip()]
+            cooldown_key = "google cse" if names and all(is_google_cse(name) for name in names) else engine_name
+            cooldown = ENGINE_COOLDOWNS.get(cooldown_key)
             if cooldown and cooldown[0] > now:
                 skipped_engines.append(engine_name)
                 diagnostics.append([engine_name, f"local cooldown: {cooldown[1]}"])
                 continue
             if cooldown:
-                ENGINE_COOLDOWNS.pop(engine_name, None)
+                ENGINE_COOLDOWNS.pop(cooldown_key, None)
 
             params = dict(base_params)
             if engine:
                 params["engines"] = engine
             attempted_engines.append(engine_name)
+            started = time.monotonic()
             try:
                 response = await client.get(SEARXNG_URL, params=params)
                 response.raise_for_status()
@@ -559,14 +590,22 @@ async def do_search(body: SearchBody, request: Request):
             except Exception as error:
                 last_error = error
                 diagnostics.append([engine_name, f"request failed: {error}"])
-                ENGINE_COOLDOWNS[engine_name] = (now + min(ENGINE_COOLDOWN_SECONDS, 60), "request failure")
+                ENGINE_COOLDOWNS[cooldown_key] = (now + min(ENGINE_COOLDOWN_SECONDS, 60), "request failure")
                 continue
 
+            latency_ms = int((time.monotonic() - started) * 1000)
             candidate_diagnostics = candidate.get("unresponsive_engines", [])
             diagnostics.extend(candidate_diagnostics)
             reason = cooldown_reason(candidate_diagnostics)
             if reason:
-                ENGINE_COOLDOWNS[engine_name] = (now + ENGINE_COOLDOWN_SECONDS, reason)
+                ENGINE_COOLDOWNS[cooldown_key] = (now + ENGINE_COOLDOWN_SECONDS, reason)
+            for name in names:
+                engine_reason = _unresponsive_reason(name, candidate_diagnostics)
+                _record_probe(name, bool(engine_reason), engine_reason, latency_ms)
+                if engine_reason and is_google_cse(name) and cooldown_reason([engine_reason]):
+                    ENGINE_COOLDOWNS["google cse"] = (now + ENGINE_COOLDOWN_SECONDS, engine_reason)
+            if names:
+                save_health()
 
             raw_results = []
             for item in candidate.get("results", []):
@@ -616,7 +655,7 @@ async def do_search(body: SearchBody, request: Request):
             # Fast mode always stops at the first usable engine. Balanced mode
             # stops early when the first result set is already relevant/diverse;
             # otherwise it obtains one additional free source and fuses results.
-            if body.mode == "fast" or body.engines:
+            if body.mode == "fast" or explicit_engines:
                 break
             if body.mode == "balanced" and len(result_lists) == 1:
                 if result_quality(body.q, raw_results[:max_results]) >= BALANCED_QUALITY_THRESHOLD:
@@ -633,7 +672,7 @@ async def do_search(body: SearchBody, request: Request):
         results = fuse_results(result_lists, max_results)
 
     current_broken = broken_engines()
-    degraded = bool(current_broken) or bool(diagnostics)
+    degraded = bool(diagnostics) or bool(excluded_unavailable) or bool(skipped_engines)
     output = {
         "query": response_data.get("query", body.q),
         "results": results,
@@ -648,13 +687,14 @@ async def do_search(body: SearchBody, request: Request):
         "unresponsive_engines": diagnostics,
         "broken_engines": current_broken,
         "excluded_broken": excluded_broken,
+        "excluded_unavailable": excluded_unavailable,
         "degraded": degraded,
         "cache_hit": False,
     }
-    if excluded_broken:
-        log.info("SEARCH_EXCLUDE_BROKEN query=%r engines=%s", body.q, excluded_broken)
+    if excluded_unavailable:
+        log.info("SEARCH_EXCLUDE_UNAVAILABLE query=%r engines=%s", body.q, excluded_unavailable)
     if degraded:
-        log.info("SEARCH_DEGRADED query=%r broken=%s", body.q, current_broken)
+        log.info("SEARCH_DEGRADED query=%r diagnostics=%s", body.q, diagnostics)
     if SEARCH_CACHE_TTL_SECONDS > 0 and (results or output["answers"]):
         SEARCH_CACHE[key] = (now, copy.deepcopy(output))
     return output
@@ -699,24 +739,33 @@ async def fetch_url(url: str, max_chars: int):
     }
 
 
+def _effective_status(name: str) -> str:
+    state = ENGINE_HEALTH.get(name) or {}
+    status = state.get("status", "unknown")
+    if status == "rate_limited" and float(state.get("retry_after") or 0) <= time.time():
+        return "degraded"
+    return status
+
+
 def _engine_view(name: str) -> dict[str, Any]:
     state = ENGINE_HEALTH.get(name) or {}
     return {
         "name": name,
-        "category": "cse" if name.startswith("cse ") else "general",
-        "status": state.get("status", "unknown"),
+        "category": "cse" if is_google_cse(name) else "general",
+        "status": _effective_status(name),
         "last_check": state.get("last_check"),
         "last_success": state.get("last_success"),
         "latency_ms": state.get("latency_ms"),
         "consecutive_failures": state.get("consecutive_failures", 0),
         "last_error": state.get("last_error"),
+        "retry_after": state.get("retry_after"),
     }
 
 
 def _health_summary() -> dict[str, int]:
     counts: dict[str, int] = {}
     for name in ALLOWED_ENGINES:
-        status = (ENGINE_HEALTH.get(name) or {}).get("status", "unknown")
+        status = _effective_status(name)
         counts[status] = counts.get(status, 0) + 1
     return counts
 

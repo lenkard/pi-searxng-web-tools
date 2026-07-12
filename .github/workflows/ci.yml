@@ -85,10 +85,10 @@ jobs:
 
           echo "ALL CONTRACT TESTS PASSED"
 
-      - name: SSRF guard self-check
-        # Runs app.py's __main__ unit check (IP-range logic + host guard) in the
-        # running API container, where all dependencies are installed.
-        run: docker compose exec -T webfetch-api python /app/app.py | grep -q "self-check OK"
+      - name: Unit and self-checks
+        run: |
+          docker compose exec -T webfetch-api python -m unittest -v test_search_logic.py
+          docker compose exec -T webfetch-api python /app/app.py | grep -q "self-check OK"
 
       - name: Dump logs on failure
         if: failure()

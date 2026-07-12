@@ -1,5 +1,23 @@
 # Changelog
 
+## v1.5.2 - 2026-07-12
+
+### Fixed
+
+- Replaced burst CSE health sweeps with a rotation of one CSE at a time across the configured two-hour interval.
+- Added a shared cooldown for all Google-backed CSEs and made rate-limit state expire instead of remaining current for hours.
+- `engines=auto` now skips unavailable focused engines and falls back to the safe default chain.
+- Real searches now update engine health; rate limits no longer count toward the broken-engine threshold.
+- Changed the default chain to `bing,yep,mwmbl,wiby`, keeping Google CSE available for focused searches without using it for routine traffic.
+- Expanded SSRF rejection to all non-global and multicast IPv4/IPv6 addresses using Python's standard library.
+- General engines are probed before CSE rotation, fixing slow startup classification.
+
+### Maintenance
+
+- Added routing, health, and SSRF unit tests to CI.
+- Removed the high-volume relevance benchmark; `scripts/benchmark.py` remains the single routine benchmark.
+- Updated stale versions and deployment documentation.
+
 ## v1.5.1 - 2026-07-12
 
 ### Fixed

@@ -17,7 +17,7 @@ import urllib.parse
 import urllib.request
 from typing import Any
 
-BASE = os.getenv("WEB_API_BASE", "http://172.17.0.1:8889").rstrip("/")
+BASE = os.getenv("WEB_API_BASE", "http://172.25.0.7:8889").rstrip("/")
 API_KEY = os.getenv("WEB_API_KEY", "")
 
 SEARCH_QUERIES = [

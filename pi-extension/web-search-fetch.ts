@@ -98,13 +98,13 @@ export default function webSearchFetchExtension(pi: ExtensionAPI) {
 					? `\n\nUpstream engine failures: ${failures.map((item: any) => Array.isArray(item) ? item.join(": ") : String(item)).join("; ")}`
 					: "";
 
-				const broken = Array.isArray(data.broken_engines) ? data.broken_engines : [];
-				const brokenText = broken.length
-					? `\n\nNote: ${broken.length} search engine(s) are currently marked broken and were auto-excluded from this search (${broken.join(", ")}). Results may be limited; you can still request a specific engine with the engines parameter.`
+				const excluded = Array.isArray(data.excluded_unavailable) ? data.excluded_unavailable : [];
+				const excludedText = excluded.length
+					? `\n\nNote: unavailable search engine(s) were skipped: ${excluded.join(", ")}.`
 					: "";
 
 				return {
-					content: [{ type: "text", text: lines.length ? `${lines.join("\n\n")}${failureText}${brokenText}` : `No search results found.${failureText}${brokenText}` }],
+					content: [{ type: "text", text: lines.length ? `${lines.join("\n\n")}${failureText}${excludedText}` : `No search results found.${failureText}${excludedText}` }],
 					details: data,
 				};
 			} catch (error) {
