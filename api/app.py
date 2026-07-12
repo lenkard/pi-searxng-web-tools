@@ -257,20 +257,27 @@ async def _probe_loop() -> None:
     while True:
         try:
             now = time.time()
+            # Probe general engines FIRST, back-to-back (independent
+            # providers, no shared IP) so the default-chain backbone
+            # classifies within seconds of startup. CSEs share one Google
+            # residential egress IP and must be staggered — probe them after,
+            # so a rate-limited CSE block can't delay general classification.
+            general = sorted(e for e in ALLOWED_ENGINES if not (e.startswith("cse ") or e == "google cse"))
+            cses = sorted(e for e in ALLOWED_ENGINES if e.startswith("cse ") or e == "google cse")
             probed = 0
-            for engine in sorted(ALLOWED_ENGINES):
-                interval = PROBE_INTERVAL_CSE if engine.startswith("cse ") else PROBE_INTERVAL_GENERAL
+            for engine in general:
                 last = (ENGINE_HEALTH.get(engine) or {}).get("last_check", 0)
-                if now - last < interval:
+                if now - last < PROBE_INTERVAL_GENERAL:
                     continue
                 await _probe_one(engine)
                 probed += 1
-                # Stagger only Google-CSE-type engines (shared residential
-                # egress IP). General engines are independent providers —
-                # probe back-to-back so the default-chain backbone classifies
-                # within seconds instead of waiting through a full sweep.
-                if engine.startswith("cse ") or engine == "google cse":
-                    await asyncio.sleep(PROBE_STAGGER_SECONDS)
+            for engine in cses:
+                last = (ENGINE_HEALTH.get(engine) or {}).get("last_check", 0)
+                if now - last < PROBE_INTERVAL_CSE:
+                    continue
+                await _probe_one(engine)
+                probed += 1
+                await asyncio.sleep(PROBE_STAGGER_SECONDS)
             if probed:
                 log.info("PROBE swept=%d engines", probed)
                 save_health()
