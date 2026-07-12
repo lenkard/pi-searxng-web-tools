@@ -25,6 +25,12 @@
 - `engines=auto` routes the query to an intent-appropriate engine set via keyword heuristics (Reddit/opinions, academic, errors/stack traces, code, documents, social), falling back to the default chain when no rule matches.
 - Auto-routed sets also exclude chronically broken engines for resilience. Explicit engine selection remains authoritative.
 
+### Single source of truth for engines
+
+- The API now derives its engine allowlist from SearXNG `settings.yml` at startup (the `keep_only` built-ins plus the custom Google CSE entries), eliminating the duplicated engine list that previously had to be edited in two places.
+- `settings.yml` is mounted read-only into the API container; an explicit `SEARXNG_ALLOWED_ENGINES` env override still wins.
+- Added `scripts/list_engines.py` to regenerate the README engine table from `settings.yml` on demand.
+
 ## v1.4.0 - 2026-07-12
 
 ### Supply-chain and maintenance

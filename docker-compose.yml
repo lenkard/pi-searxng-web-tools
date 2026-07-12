@@ -41,6 +41,9 @@ services:
     volumes:
       # Persists engine-health probe history across restarts.
       - webfetch-data:/data
+      # Read-only SearXNG settings: the single source of truth for the engine
+      # allowlist (the API derives its allowed engines from settings.yml).
+      - ./searxng:/etc/searxng:ro
 
 volumes:
   searxng-cache:

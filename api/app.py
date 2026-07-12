@@ -18,6 +18,7 @@ import time
 import anyio
 import httpx
 import trafilatura
+import yaml
 from bs4 import BeautifulSoup
 
 logging.basicConfig(
@@ -99,11 +100,45 @@ cse central asia stats,cse baltic stats,cse wikileaks,cse fact checks,
 cse file sharing,cse amazon cloud,cse google drive,cse slideshare,cse webcams,
 cse telegram,cse slack discord
 """
-ALLOWED_ENGINES = {
-    engine.strip()
-    for engine in os.getenv("SEARXNG_ALLOWED_ENGINES", DEFAULT_ALLOWED_ENGINES).split(",")
-    if engine.strip()
-}
+SEARXNG_SETTINGS_PATH = os.getenv("SEARXNG_SETTINGS_PATH", "/etc/searxng/settings.yml")
+
+
+def _load_allowed_from_settings(path: str = SEARXNG_SETTINGS_PATH) -> Optional[set]:
+    """Derive the engine allowlist from SearXNG settings.yml (keep_only + custom engines).
+
+    settings.yml is the single source of truth for which engines exist; the API
+    reads it so the two services never drift. Returns None when the file is
+    absent or unparseable so callers fall back to the built-in default list.
+    """
+    try:
+        data = yaml.safe_load(Path(path).read_text())
+    except FileNotFoundError:
+        return None
+    except Exception as error:
+        log.warning("could not parse %s: %s; using built-in allowlist", path, error)
+        return None
+    engines: set[str] = set()
+    use_default = (data or {}).get("use_default_settings") or {}
+    keep_only = (use_default.get("engines") or {}).get("keep_only") or []
+    engines.update(str(name) for name in keep_only)
+    for entry in (data or {}).get("engines") or []:
+        name = entry.get("name") if isinstance(entry, dict) else None
+        if name:
+            engines.add(str(name))
+    return engines
+
+
+# Explicit env override wins; otherwise derive from settings.yml (single source
+# of truth); otherwise the built-in default list (fallback for non-compose use).
+_env_allowed = os.getenv("SEARXNG_ALLOWED_ENGINES")
+if _env_allowed:
+    ALLOWED_ENGINES = {engine.strip() for engine in _env_allowed.split(",") if engine.strip()}
+else:
+    ALLOWED_ENGINES = _load_allowed_from_settings() or {
+        engine.strip()
+        for engine in DEFAULT_ALLOWED_ENGINES.split(",")
+        if engine.strip()
+    }
 
 SEARCH_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 ENGINE_COOLDOWNS: dict[str, tuple[float, str]] = {}
@@ -829,6 +864,27 @@ if __name__ == "__main__":
     assert route_auto("best laptop reddit opinions") == "cse reddit"
     assert route_auto("deploy django github repository") == "github code,github,gitlab"
     assert route_auto("hello world foo bar") is None  # no rule -> default chain
+
+    # settings.yml -> allowlist derivation (single source of truth)
+    import tempfile
+    sample_settings = (
+        "use_default_settings:\n"
+        "  engines:\n"
+        "    keep_only:\n"
+        "      - google cse\n"
+        "      - bing\n"
+        "engines:\n"
+        "  - name: cse reddit\n"
+        "    engine: google_cse\n"
+        "  - name: cse documents\n"
+        "    engine: google_cse\n"
+    )
+    with tempfile.NamedTemporaryFile("w", suffix=".yml", delete=False) as tmp:
+        tmp.write(sample_settings)
+        tmp_path = tmp.name
+    derived = _load_allowed_from_settings(tmp_path)
+    os.unlink(tmp_path)
+    assert derived == {"google cse", "bing", "cse reddit", "cse documents"}, derived
 
     print("self-check OK")
     sys.exit(0)
