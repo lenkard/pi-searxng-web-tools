@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.5.3 - 2026-07-12
+
+### Fixed
+
+- Docker Compose now forwards the documented probe, logging, and private-fetch settings from `.env` to the API container instead of silently ignoring overrides.
+
 ## v1.5.2 - 2026-07-12
 
 ### Fixed

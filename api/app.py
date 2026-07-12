@@ -326,7 +326,7 @@ async def lifespan(_app: FastAPI):
         save_health()
 
 
-app = FastAPI(title="Private Web Search/Fetch API", version="1.5.2", lifespan=lifespan)
+app = FastAPI(title="Private Web Search/Fetch API", version="1.5.3", lifespan=lifespan)
 
 
 class SearchBody(BaseModel):
