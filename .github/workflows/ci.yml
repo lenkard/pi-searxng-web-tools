@@ -18,6 +18,10 @@ jobs:
   build-and-test:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      # Required by compose interpolation for BOTH build and up (see ${SEARXNG_SECRET:?}).
+      # CI-only value; never used in production.
+      SEARXNG_SECRET: ci-secret-not-for-production-0123456789
     steps:
       - uses: actions/checkout@v4
 
@@ -26,8 +30,6 @@ jobs:
         run: docker compose build
 
       - name: Start stack
-        env:
-          SEARXNG_SECRET: ci-secret-not-for-production-0123456789
         run: |
           docker compose up -d
           # Wait for the API to answer /health (up to ~2 min).
