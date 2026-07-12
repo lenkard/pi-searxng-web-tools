@@ -8,6 +8,10 @@
 - Pinned all Python dependencies in `api/requirements.txt` to exact versions.
 - Added Dependabot configuration for Docker image digests, pip packages, and GitHub Actions, grouped to reduce PR noise.
 
+### CI
+
+- Added a GitHub-hosted CI workflow that builds both pinned images, boots the full Compose stack, and runs deterministic contract tests (health, empty-query/limit/pageno rejection, PyPI stays disabled) without depending on live search providers.
+
 ## v1.3.0 - 2026-07-12
 
 ### Search providers
