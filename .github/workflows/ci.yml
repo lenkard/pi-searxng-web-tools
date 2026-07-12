@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Least privilege: only read the repo contents.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build images
+        # Validates that the pinned digests resolve and the SearXNG patch builds.
+        run: docker compose build
+
+      - name: Start stack
+        env:
+          SEARXNG_SECRET: ci-secret-not-for-production-0123456789
+        run: |
+          docker compose up -d
+          # Wait for the API to answer /health (up to ~2 min).
+          code=
+          for i in $(seq 1 60); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8889/health || true)
+            [ "$code" = "200" ] && break
+            sleep 2
+          done
+          if [ "$code" != "200" ]; then
+            echo "::error::API did not become healthy"
+            docker compose logs
+            exit 1
+          fi
+
+      - name: Validation contract tests
+        # These exercise the FastAPI handlers directly and never depend on
+        # live search providers, so they are deterministic in CI.
+        run: |
+          set -eu
+          API=http://127.0.0.1:8889
+
+          assert_code () {  # <expected_http_code> <url>
+            local got
+            got=$(curl -s -o /dev/null -w '%{http_code}' "$2")
+            echo "  $2 -> $got (want $1)"
+            [ "$got" = "$1" ] || { echo "::error::expected $1 for $2"; exit 1; }
+          }
+
+          echo "== health =="
+          curl -fsS "$API/health" | grep -q '"ok":true'
+
+          echo "== input validation rejects with 400 =="
+          assert_code 400 "$API/websearch?q="
+          assert_code 400 "$API/websearch?q=test&pageno=0"
+          assert_code 400 "$API/websearch?q=test&max_results=0"
+          assert_code 400 "$API/websearch?q=test&max_results=51"
+
+          echo "== pypi stays disabled, unknown engines rejected =="
+          assert_code 400 "$API/websearch?q=test&engines=pypi"
+          assert_code 400 "$API/websearch?q=test&engines=pypi,nonexistent-engine"
+
+          echo "ALL CONTRACT TESTS PASSED"
+
+      - name: Dump logs on failure
+        if: failure()
+        run: docker compose logs --tail=200
