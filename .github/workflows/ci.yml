@@ -72,7 +72,17 @@ jobs:
           assert_code 400 "$API/websearch?q=test&engines=pypi"
           assert_code 400 "$API/websearch?q=test&engines=pypi,nonexistent-engine"
 
+          echo "== SSRF: private/loopback fetch targets rejected (expect 400) =="
+          assert_code 400 "$API/webfetch?url=http://127.0.0.1/"
+          assert_code 400 "$API/webfetch?url=http://169.254.169.254/"
+          assert_code 400 "$API/webfetch?url=http://10.0.0.1/"
+
           echo "ALL CONTRACT TESTS PASSED"
+
+      - name: SSRF guard self-check
+        # Runs app.py's __main__ unit check (IP-range logic + host guard) in the
+        # running API container, where all dependencies are installed.
+        run: docker compose exec -T webfetch-api python /app/app.py | grep -q "SSRF self-check OK"
 
       - name: Dump logs on failure
         if: failure()

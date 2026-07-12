@@ -12,6 +12,10 @@
 
 - Added a GitHub-hosted CI workflow that builds both pinned images, boots the full Compose stack, and runs deterministic contract tests (health, empty-query/limit/pageno rejection, PyPI stays disabled) without depending on live search providers.
 
+### Security
+
+- Added SSRF protection to `web_fetch`: hosts resolving to private, loopback, link-local, or reserved ranges (including cloud metadata endpoints) are rejected with HTTP 400. The guard runs before the first request and on every redirect hop. An opt-out `WEB_FETCH_ALLOW_PRIVATE` flag exists for trusted internal deployments.
+
 ## v1.3.0 - 2026-07-12
 
 ### Search providers

@@ -3,11 +3,14 @@ from pydantic import BaseModel, HttpUrl
 from typing import Any, Literal, Optional
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 import copy
+import ipaddress
 import os
 import re
 import secrets
+import socket
 import time
 
+import anyio
 import httpx
 import trafilatura
 from bs4 import BeautifulSoup
@@ -19,6 +22,61 @@ ENGINE_COOLDOWN_SECONDS = max(10, int(os.getenv("ENGINE_COOLDOWN_SECONDS", "300"
 BALANCED_QUALITY_THRESHOLD = min(1.0, max(0.0, float(os.getenv("BALANCED_QUALITY_THRESHOLD", "0.58"))))
 USER_AGENT = os.getenv("WEB_API_USER_AGENT", "Mozilla/5.0 (compatible; private-web-api/1.0)")
 WEB_API_KEY = os.getenv("WEB_API_KEY", "")
+
+# --- SSRF protection for web_fetch -------------------------------------------
+# All four webfetch endpoints route through fetch_url(), so the guard lives here
+# once. Refuse hosts that resolve to private / loopback / link-local / reserved
+# ranges (incl. cloud metadata endpoints). Explicit escape hatch for trusted
+# deployments that must fetch internal addresses.
+WEB_FETCH_ALLOW_PRIVATE = os.getenv("WEB_FETCH_ALLOW_PRIVATE", "false").lower() in ("1", "true", "yes")
+
+_BLOCKED_V4 = [ipaddress.ip_network(n) for n in (
+    "0.0.0.0/8", "10.0.0.0/8", "100.64.0.0/10", "127.0.0.0/8", "169.254.0.0/16",
+    "172.16.0.0/12", "192.0.2.0/24", "192.168.0.0/16", "198.18.0.0/15",
+    "224.0.0.0/4", "240.0.0.0/4",
+)]
+_BLOCKED_V6 = [ipaddress.ip_network(n) for n in (
+    "::1/128", "fc00::/7", "fe80::/10", "::ffff:0:0/96",
+)]
+
+
+def _is_blocked_ip(addr) -> bool:
+    # IPv4-mapped IPv6 (::ffff:a.b.c.d) is a classic bypass; check the v4 form.
+    if isinstance(addr, ipaddress.IPv6Address) and addr.ipv4_mapped is not None:
+        addr = addr.ipv4_mapped
+    networks = _BLOCKED_V4 if isinstance(addr, ipaddress.IPv4Address) else _BLOCKED_V6
+    return any(addr in net for net in networks)
+
+
+def assert_safe_host(host: str) -> None:
+    """Reject hosts that resolve to a private or reserved address."""
+    if WEB_FETCH_ALLOW_PRIVATE:
+        return
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except socket.gaierror as error:
+        raise HTTPException(status_code=400, detail=f"Could not resolve host {host}: {error}")
+    for info in infos:
+        ip = ipaddress.ip_address(info[4][0])
+        if _is_blocked_ip(ip):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Refused: {host} resolves to a private or reserved address",
+            )
+
+
+async def _ssrf_request_hook(request: httpx.Request) -> None:
+    # Fires on the initial request and on every redirect hop, so a redirect to an
+    # internal address is still caught. ponytail: this covers direct private IPs,
+    # metadata endpoints, and redirects. NOT covered: DNS rebinding (TTL-0 returns
+    # a public IP at check time, private at connect time). Pinning the resolved IP
+    # at the transport layer would close that; out of scope for a low-risk private
+    # search endpoint.
+    host = request.url.host
+    if host:
+        await anyio.to_thread.run_sync(assert_safe_host, host)
+
+
 DEFAULT_ALLOWED_ENGINES = """
 google cse,mojeek,yep,bing,mwmbl,wiby,wikipedia,github,arxiv,
 crossref,gitlab,github code,hackernews,openalex,stackoverflow,semantic scholar,
@@ -339,10 +397,14 @@ async def fetch_url(url: str, max_chars: int):
             timeout=30,
             follow_redirects=True,
             headers={"User-Agent": USER_AGENT},
+            event_hooks={"request": [_ssrf_request_hook]},
         ) as client:
             response = await client.get(url)
             response.raise_for_status()
             html = response.text
+    except HTTPException:
+        # Let validation/SSRF errors (400) propagate; do not mask them as 502.
+        raise
     except Exception as error:
         raise HTTPException(status_code=502, detail=f"Fetch failed: {error}")
 
@@ -463,3 +525,26 @@ async def api_web_fetch_get(request: Request, url: HttpUrl = Query(...), max_cha
 async def api_web_fetch_post(body: FetchBody, request: Request):
     require_api_key(request)
     return await fetch_url(str(body.url), body.max_chars)
+
+
+if __name__ == "__main__":
+    # SSRF guard self-check (runnable via `python app.py`, no network needed:
+    # IP literals skip DNS).
+    import sys
+
+    for ip_s in ["169.254.169.254", "127.0.0.1", "10.1.2.3", "172.16.0.1",
+                 "192.168.0.1", "100.64.0.1", "0.0.0.1", "224.0.0.1"]:
+        assert _is_blocked_ip(ipaddress.ip_address(ip_s)), f"expected blocked: {ip_s}"
+    assert _is_blocked_ip(ipaddress.ip_address("::ffff:169.254.169.254")), "mapped-v6 bypass"
+    assert _is_blocked_ip(ipaddress.ip_address("::1")), "::1 should be blocked"
+    for ip_s in ["1.1.1.1", "8.8.8.8", "93.184.216.34"]:
+        assert not _is_blocked_ip(ipaddress.ip_address(ip_s)), f"expected allowed: {ip_s}"
+    for host in ["169.254.169.254", "127.0.0.1"]:
+        try:
+            assert_safe_host(host)
+        except HTTPException as exc:
+            assert exc.status_code == 400, host
+        else:
+            raise SystemExit(f"FAIL: {host} was not blocked")
+    print("SSRF self-check OK")
+    sys.exit(0)
