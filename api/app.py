@@ -379,6 +379,40 @@ def cooldown_reason(diagnostics: list[Any]) -> Optional[str]:
     return next((marker for marker in markers if marker in text), None)
 
 
+# Keyword heuristics for engines=auto. ponytail: naive substring rules, first
+# match wins, tunable via AUTO_ROUTES. No ML, no new dependency. All engines
+# referenced here must exist in ALLOWED_ENGINES.
+AUTO_ROUTES: list[tuple[tuple[str, ...], str]] = [
+    (("reddit", "opinion", "opinions", "review", "reviews", "experience",
+      "experiences", "forum", "discussion", "comments"),
+     "cse reddit"),
+    (("paper", "papers", "citation", "citations", "study", "studies", "academic",
+      "research", "arxiv", "doi", "scholar", "journal", "preprint"),
+     "openalex,semantic scholar,crossref,arxiv"),
+    (("error", "exception", "stacktrace", "stack trace", "traceback", "segfault",
+      "crash", "undefined", "nullpointer"),
+     "stackoverflow,github code"),
+    (("github", "gitlab", "repository", "repo", "implementation", "source code",
+      "library", "package", "npm", "pypi"),
+     "github code,github,gitlab"),
+    (("pdf", "report", "manual", "presentation", "slides", "whitepaper",
+      "datasheet", "documentation"),
+     "cse documents"),
+    (("twitter", "x.com", "instagram", "tiktok", "linkedin", "facebook",
+      "mastodon", "social"),
+     "cse social"),
+]
+
+
+def route_auto(query: str) -> Optional[str]:
+    """Pick an engine set for a query via keyword heuristics, or None for the default chain."""
+    q = query.lower()
+    for keywords, engines in AUTO_ROUTES:
+        if any(keyword in q for keyword in keywords):
+            return engines
+    return None
+
+
 def cache_key(body: SearchBody) -> str:
     return body.model_dump_json(exclude_none=True)
 
@@ -391,6 +425,21 @@ async def do_search(body: SearchBody, request: Request):
         raise HTTPException(status_code=400, detail="pageno must be at least 1")
     if body.max_results < 1 or body.max_results > 50:
         raise HTTPException(status_code=400, detail="max_results must be between 1 and 50")
+
+    # Resolve "auto" keyword routing to a concrete engine set (or None -> default
+    # chain), excluding any chronically broken engines for resilience.
+    auto_excluded: list[str] = []
+    if body.engines == "auto":
+        routed = route_auto(body.q)
+        if routed:
+            broken_now = broken_engines()
+            wanted = [e.strip() for e in routed.split(",") if e.strip()]
+            auto_excluded = [e for e in wanted if e in broken_now]
+            kept = [e for e in wanted if e not in broken_now]
+            body.engines = ",".join(kept) if kept else None
+        else:
+            body.engines = None
+
     if body.engines:
         requested_engines = {engine.strip() for engine in body.engines.split(",") if engine.strip()}
         unknown_engines = sorted(requested_engines - ALLOWED_ENGINES)
@@ -421,7 +470,7 @@ async def do_search(body: SearchBody, request: Request):
     # Explicit caller input keeps SearXNG's normal comma-separated aggregation.
     # The configured default is a sequential fallback chain, avoiding a blocked
     # engine poisoning a combined SearXNG response.
-    excluded_broken: list[str] = []
+    excluded_broken: list[str] = list(auto_excluded)
     if body.engines:
         engine_attempts = [body.engines]
     else:
@@ -773,6 +822,13 @@ if __name__ == "__main__":
     _record_probe(probe_engine, True, "HTTP 429: too many requests", None)
     assert ENGINE_HEALTH[probe_engine]["status"] == "rate_limited", ENGINE_HEALTH[probe_engine]
     ENGINE_HEALTH.clear()
+
+    # auto keyword routing
+    assert route_auto("python stack trace crash") == "stackoverflow,github code"
+    assert route_auto("climate change paper citation doi") == "openalex,semantic scholar,crossref,arxiv"
+    assert route_auto("best laptop reddit opinions") == "cse reddit"
+    assert route_auto("deploy django github repository") == "github code,github,gitlab"
+    assert route_auto("hello world foo bar") is None  # no rule -> default chain
 
     print("self-check OK")
     sys.exit(0)

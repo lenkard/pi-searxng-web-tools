@@ -20,6 +20,11 @@
 - The skill surfaces chronically broken engines in its output.
 - Added structured, greppable logging (`ENGINE_FAIL`, `ENGINE_BROKEN`, `ENGINE_RECOVER`, `SEARCH_DEGRADED`, `PROBE`) to aid diagnosis via `docker compose logs`.
 
+### Auto query routing
+
+- `engines=auto` routes the query to an intent-appropriate engine set via keyword heuristics (Reddit/opinions, academic, errors/stack traces, code, documents, social), falling back to the default chain when no rule matches.
+- Auto-routed sets also exclude chronically broken engines for resilience. Explicit engine selection remains authoritative.
+
 ## v1.4.0 - 2026-07-12
 
 ### Supply-chain and maintenance
