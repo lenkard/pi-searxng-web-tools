@@ -36,18 +36,15 @@ services:
       ENGINE_COOLDOWN_SECONDS: ${ENGINE_COOLDOWN_SECONDS:-300}
       BALANCED_QUALITY_THRESHOLD: ${BALANCED_QUALITY_THRESHOLD:-0.58}
       PROBE_QUERY: ${PROBE_QUERY:-open source software}
-      PROBE_INTERVAL_GENERAL: ${PROBE_INTERVAL_GENERAL:-900}
-      PROBE_INTERVAL_CSE: ${PROBE_INTERVAL_CSE:-7200}
-      PROBE_TICK_SECONDS: ${PROBE_TICK_SECONDS:-60}
-      PROBE_STARTUP_DELAY: ${PROBE_STARTUP_DELAY:-30}
-      ENGINE_BROKEN_THRESHOLD: ${ENGINE_BROKEN_THRESHOLD:-3}
+      CONFIRM_FAILURE_DELAY_SECONDS: ${CONFIRM_FAILURE_DELAY_SECONDS:-5}
+      HEALTH_STALE_SECONDS: ${HEALTH_STALE_SECONDS:-86400}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       WEB_FETCH_ALLOW_PRIVATE: ${WEB_FETCH_ALLOW_PRIVATE:-false}
       # Optional shared secret for /websearch and /webfetch.
       # If set, clients must send X-API-Key or Authorization: Bearer <key>.
       WEB_API_KEY: ${WEB_API_KEY:-}
     volumes:
-      # Persists engine-health probe history across restarts.
+      # Persists runtime engine-health history across restarts.
       - webfetch-data:/data
       # Read-only SearXNG settings: the single source of truth for the engine
       # allowlist (the API derives its allowed engines from settings.yml).

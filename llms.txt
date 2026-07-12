@@ -3,7 +3,7 @@
 Self-hosted search and readable-page extraction for the pi coding agent.
 
 Repository: https://github.com/lenkard/pi-searxng-web-tools
-Current release: v1.5.4
+Current release: v1.6.0
 
 ## Components
 
@@ -23,7 +23,7 @@ Current release: v1.5.4
 
 Search supports `fast`, `balanced`, and `deep` modes plus `engines=auto` intent routing. The safe sequential default is `bing,yep,mwmbl,wiby`. Google CSE remains available for focused searches.
 
-General engines are health-checked every 15 minutes. Google-backed CSEs share one residential egress IP, so the monitor rotates one CSE at a time across two hours instead of issuing a burst. A CSE rate limit cools the shared group, and automatic routing falls back to the safe default chain.
+Engine health is updated by real searches. Non-rate-limit failures receive one delayed confirmation; rate limits are not retried and Google-backed CSEs share one cooldown. Healthy and unused engines are never probed. Stale or recovered engines become runtime canaries, and automatic routing falls back to the safe default chain.
 
 ## Install
 
@@ -31,7 +31,7 @@ General engines are health-checked every 15 minutes. Google-backed CSEs share on
 cp .env.example .env
 # set a generated SEARXNG_SECRET in .env
 docker compose up -d --build
-pi install git:github.com/lenkard/pi-searxng-web-tools@v1.5.4
+pi install git:github.com/lenkard/pi-searxng-web-tools@v1.6.0
 # restart pi or run /reload
 ```
 

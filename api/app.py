@@ -133,21 +133,18 @@ SEARCH_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 ENGINE_COOLDOWNS: dict[str, tuple[float, str]] = {}
 
 # --- Engine health monitoring ------------------------------------------------
-# A background task periodically probes each engine through SearXNG and records
-# whether it responds. Chronically broken engines are auto-excluded from
-# default searches so single-engine failures stop degrading results silently.
-# State persists to disk so restarts keep failure history. ponytail: one file,
-# in-process loop, no DB/HTML dashboard; this is an agent-facing tool, so the
-# JSON endpoints ARE the dashboard.
+# Real searches are the source of truth. A failed engine gets one delayed
+# confirmation request; healthy and unused engines are never swept. State
+# persists to disk so restarts keep cooldowns and recent observations.
+# ponytail: one file and one confirmation task; runtime traffic is the monitor.
 WEBFETCH_DATA_DIR = os.getenv("WEBFETCH_DATA_DIR", "/data")
 PROBE_QUERY = os.getenv("PROBE_QUERY", "open source software")
-PROBE_INTERVAL_GENERAL = max(60, int(os.getenv("PROBE_INTERVAL_GENERAL", "900")))
-PROBE_INTERVAL_CSE = max(300, int(os.getenv("PROBE_INTERVAL_CSE", "7200")))
-PROBE_TICK_SECONDS = max(30, int(os.getenv("PROBE_TICK_SECONDS", "60")))
-PROBE_STARTUP_DELAY = max(0, int(os.getenv("PROBE_STARTUP_DELAY", "30")))
-ENGINE_BROKEN_THRESHOLD = max(1, int(os.getenv("ENGINE_BROKEN_THRESHOLD", "3")))
+CONFIRM_FAILURE_DELAY_SECONDS = max(1, int(os.getenv("CONFIRM_FAILURE_DELAY_SECONDS", "5")))
+HEALTH_STALE_SECONDS = max(60, int(os.getenv("HEALTH_STALE_SECONDS", "86400")))
+ENGINE_BROKEN_THRESHOLD = 2
 
 ENGINE_HEALTH: dict[str, dict[str, Any]] = {}
+CONFIRM_TASK: Optional[asyncio.Task] = None
 
 
 def _health_path() -> Path:
@@ -195,17 +192,13 @@ def _restore_cse_cooldown() -> None:
 
 
 def broken_engines() -> list[str]:
-    return sorted(
-        name for name, state in ENGINE_HEALTH.items()
-        if name in ALLOWED_ENGINES and state.get("status") == "broken"
-    )
+    return sorted(name for name in ALLOWED_ENGINES if _effective_status(name) == "broken")
 
 
 def _is_temporarily_unavailable(engine: str, now: Optional[float] = None) -> bool:
     state = ENGINE_HEALTH.get(engine) or {}
-    if state.get("status") == "broken":
-        return True
-    if state.get("status") == "rate_limited" and float(state.get("retry_after") or 0) > (now or time.time()):
+    wall_now = now or time.time()
+    if state.get("status") in ("broken", "rate_limited") and float(state.get("retry_after") or 0) > wall_now:
         return True
     group_cooldown = ENGINE_COOLDOWNS.get("google cse") if is_google_cse(engine) else None
     return bool(group_cooldown and group_cooldown[0] > time.monotonic())
@@ -223,6 +216,11 @@ def _unresponsive_reason(engine: str, unresponsive: list[Any]) -> Optional[str]:
     return None
 
 
+def _is_rate_limit(reason: Optional[str]) -> bool:
+    text = (reason or "").lower()
+    return any(marker in text for marker in ("captcha", "too many requests", "suspended", "rate limit", "429"))
+
+
 def _record_probe(engine: str, failed: bool, reason: Optional[str], latency_ms: Optional[int]) -> None:
     now = time.time()
     state = ENGINE_HEALTH.get(engine) or {
@@ -230,116 +228,85 @@ def _record_probe(engine: str, failed: bool, reason: Optional[str], latency_ms: 
         "latency_ms": None, "consecutive_failures": 0, "last_error": None,
     }
     ENGINE_HEALTH[engine] = state
+    previous_check = float(state.get("last_check") or 0)
     state["last_check"] = now
     if not failed:
         previous = state.get("status")
         state.update(status="healthy", last_success=now, latency_ms=latency_ms,
                      consecutive_failures=0, last_error=None, retry_after=None)
-        if previous in ("broken", "rate_limited", "degraded", "unknown"):
+        if previous in ("broken", "rate_limited", "degraded", "stale", "unknown"):
             log.info("ENGINE_RECOVER engine=%s prev=%s", engine, previous)
         return
+
     state["last_error"] = reason
-    is_rate_limit = bool(reason) and cooldown_reason([reason]) is not None
     log.warning("ENGINE_FAIL engine=%s reason=%s", engine, reason)
-    if is_rate_limit:
-        state["status"] = "rate_limited"
-        state["retry_after"] = now + ENGINE_COOLDOWN_SECONDS
+    if _is_rate_limit(reason):
+        state.update(status="rate_limited", consecutive_failures=0,
+                     retry_after=now + ENGINE_COOLDOWN_SECONDS)
+        if is_google_cse(engine):
+            ENGINE_COOLDOWNS["google cse"] = (time.monotonic() + ENGINE_COOLDOWN_SECONDS, reason or "rate limited")
+        return
+
+    if now - previous_check > ENGINE_COOLDOWN_SECONDS:
+        state["consecutive_failures"] = 0
+    state["consecutive_failures"] = int(state.get("consecutive_failures", 0)) + 1
+    if state["consecutive_failures"] >= ENGINE_BROKEN_THRESHOLD:
+        state.update(status="broken", retry_after=now + ENGINE_COOLDOWN_SECONDS)
+        log.warning("ENGINE_BROKEN engine=%s failures=%s reason=%s",
+                    engine, state["consecutive_failures"], reason)
     else:
-        state["consecutive_failures"] = int(state.get("consecutive_failures", 0)) + 1
-    if not is_rate_limit and state["consecutive_failures"] >= ENGINE_BROKEN_THRESHOLD:
-        if state.get("status") != "broken":
-            log.warning("ENGINE_BROKEN engine=%s failures=%s reason=%s",
-                        engine, state["consecutive_failures"], reason)
-        state["status"] = "broken"
-    elif not is_rate_limit:
-        state["status"] = "degraded"
+        state.update(status="degraded", retry_after=None)
 
 
-async def _probe_one(engine: str) -> None:
-    start = time.monotonic()
-    failed = False
-    reason: Optional[str] = None
-    latency_ms: Optional[int] = None
+async def _confirm_failure(engine: str) -> None:
+    global CONFIRM_TASK
     try:
-        async with httpx.AsyncClient(timeout=20, headers={"User-Agent": USER_AGENT}) as client:
-            response = await client.get(SEARXNG_URL, params={
-                "q": PROBE_QUERY, "format": "json", "engines": engine, "pageno": 1,
-            })
-            response.raise_for_status()
-            payload = response.json()
-        reason = _unresponsive_reason(engine, payload.get("unresponsive_engines", []))
-        if reason:
-            failed = True
-        latency_ms = int((time.monotonic() - start) * 1000)
-    except Exception as error:
-        failed = True
-        reason = f"probe error: {error}"
-    _record_probe(engine, failed, reason, latency_ms)
-    if failed and reason and is_google_cse(engine) and cooldown_reason([reason]):
-        ENGINE_COOLDOWNS["google cse"] = (time.monotonic() + ENGINE_COOLDOWN_SECONDS, reason)
-
-
-def _next_cse_probe(now: float) -> Optional[str]:
-    cses = sorted(e for e in ALLOWED_ENGINES if is_google_cse(e))
-    if not cses:
-        return None
-    cooldown = ENGINE_COOLDOWNS.get("google cse")
-    if cooldown and cooldown[0] > time.monotonic():
-        return None
-    last_probe = max(((ENGINE_HEALTH.get(e) or {}).get("last_check", 0) for e in cses), default=0)
-    if now - last_probe < PROBE_INTERVAL_CSE / len(cses):
-        return None
-    return min(cses, key=lambda e: (ENGINE_HEALTH.get(e) or {}).get("last_check", 0))
-
-
-async def _probe_loop() -> None:
-    await asyncio.sleep(PROBE_STARTUP_DELAY)
-    while True:
+        await asyncio.sleep(CONFIRM_FAILURE_DELAY_SECONDS)
+        state = ENGINE_HEALTH.get(engine) or {}
+        if state.get("status") != "degraded":
+            return
+        start = time.monotonic()
         try:
-            now = time.time()
-            probed = 0
-            for engine in sorted(e for e in ALLOWED_ENGINES if not is_google_cse(e)):
-                last = (ENGINE_HEALTH.get(engine) or {}).get("last_check", 0)
-                cooldown = ENGINE_COOLDOWNS.get(engine)
-                if now - last < PROBE_INTERVAL_GENERAL or (cooldown and cooldown[0] > time.monotonic()):
-                    continue
-                await _probe_one(engine)
-                probed += 1
-
-            # CSEs share one Google-facing residential IP. Rotate one engine
-            # across the full interval instead of repeating a burst sweep.
-            cse = _next_cse_probe(now)
-            if cse:
-                await _probe_one(cse)
-                probed += 1
-
-            if probed:
-                log.info("PROBE checked=%d engines", probed)
-                save_health()
-        except asyncio.CancelledError:
-            raise
+            async with httpx.AsyncClient(timeout=20, headers={"User-Agent": USER_AGENT}) as client:
+                response = await client.get(SEARXNG_URL, params={
+                    "q": PROBE_QUERY, "format": "json", "engines": engine, "pageno": 1,
+                })
+                response.raise_for_status()
+                payload = response.json()
+            reason = _unresponsive_reason(engine, payload.get("unresponsive_engines", []))
+            _record_probe(engine, bool(reason), reason, int((time.monotonic() - start) * 1000))
         except Exception as error:
-            log.exception("probe loop error: %s", error)
-        await asyncio.sleep(PROBE_TICK_SECONDS)
+            _record_probe(engine, True, f"confirmation error: {error}", None)
+        save_health()
+    finally:
+        CONFIRM_TASK = None
+
+
+def _schedule_confirmation(engine: str) -> None:
+    global CONFIRM_TASK
+    if CONFIRM_TASK is None or CONFIRM_TASK.done():
+        CONFIRM_TASK = asyncio.create_task(_confirm_failure(engine))
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    global CONFIRM_TASK
     load_health()
-    task = asyncio.create_task(_probe_loop())
-    log.info("STARTUP engine-health probe loop started")
+    log.info("STARTUP runtime-driven engine health enabled")
     try:
         yield
     finally:
-        task.cancel()
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
+        if CONFIRM_TASK and not CONFIRM_TASK.done():
+            CONFIRM_TASK.cancel()
+            try:
+                await CONFIRM_TASK
+            except asyncio.CancelledError:
+                pass
+        CONFIRM_TASK = None
         save_health()
 
 
-app = FastAPI(title="Private Web Search/Fetch API", version="1.5.4", lifespan=lifespan)
+app = FastAPI(title="Private Web Search/Fetch API", version="1.6.0", lifespan=lifespan)
 
 
 class SearchBody(BaseModel):
@@ -457,7 +424,7 @@ def fuse_results(result_lists: list[list[dict[str, Any]]], max_results: int) -> 
 
 def cooldown_reason(diagnostics: list[Any]) -> Optional[str]:
     text = " ".join(str(item) for item in diagnostics).lower()
-    markers = ("captcha", "too many requests", "access denied", "suspended", "rate limit", "429")
+    markers = ("captcha", "too many requests", "suspended", "rate limit", "429")
     return next((marker for marker in markers if marker in text), None)
 
 
@@ -557,10 +524,7 @@ async def do_search(body: SearchBody, request: Request):
     full_chain = [engine.strip() for engine in SEARXNG_DEFAULT_ENGINES.split(",") if engine.strip()]
     available_defaults, default_excluded = _available_engines(full_chain)
     excluded_unavailable = list(dict.fromkeys(auto_excluded + default_excluded))
-    excluded_broken = [
-        engine for engine in excluded_unavailable
-        if (ENGINE_HEALTH.get(engine) or {}).get("status") == "broken"
-    ]
+    excluded_broken = [engine for engine in excluded_unavailable if _effective_status(engine) == "broken"]
     if explicit_engines:
         engine_attempts = [body.engines]
     else:
@@ -615,8 +579,8 @@ async def do_search(body: SearchBody, request: Request):
             for name in names:
                 engine_reason = _unresponsive_reason(name, candidate_diagnostics)
                 _record_probe(name, bool(engine_reason), engine_reason, latency_ms)
-                if engine_reason and is_google_cse(name) and cooldown_reason([engine_reason]):
-                    ENGINE_COOLDOWNS["google cse"] = (now + ENGINE_COOLDOWN_SECONDS, engine_reason)
+                if engine_reason and not _is_rate_limit(engine_reason):
+                    _schedule_confirmation(name)
             if names:
                 save_health()
 
@@ -755,8 +719,11 @@ async def fetch_url(url: str, max_chars: int):
 def _effective_status(name: str) -> str:
     state = ENGINE_HEALTH.get(name) or {}
     status = state.get("status", "unknown")
-    if status == "rate_limited" and float(state.get("retry_after") or 0) <= time.time():
-        return "degraded"
+    now = time.time()
+    if status in ("rate_limited", "broken") and float(state.get("retry_after") or 0) <= now:
+        return "stale"
+    if state.get("last_check") and now - float(state["last_check"]) > HEALTH_STALE_SECONDS:
+        return "stale"
     return status
 
 

@@ -53,9 +53,11 @@ class SearchLogicTests(unittest.TestCase):
             app._record_probe("cse reddit", True, "HTTP 429 too many requests", None)
         self.assertEqual(app.ENGINE_HEALTH["cse reddit"]["status"], "rate_limited")
         self.assertEqual(app.ENGINE_HEALTH["cse reddit"]["consecutive_failures"], 0)
+        self.assertIn("google cse", app.ENGINE_COOLDOWNS)
         app.ENGINE_HEALTH["cse reddit"]["retry_after"] = time.time() - 1
-        self.assertEqual(app._effective_status("cse reddit"), "degraded")
+        self.assertEqual(app._effective_status("cse reddit"), "stale")
         app.ENGINE_HEALTH.clear()
+        app.ENGINE_COOLDOWNS.clear()
 
     def test_persisted_cse_rate_limit_restores_shared_cooldown(self):
         app.ENGINE_HEALTH.clear()
@@ -69,23 +71,45 @@ class SearchLogicTests(unittest.TestCase):
         app.ENGINE_HEALTH.clear()
         app.ENGINE_COOLDOWNS.clear()
 
-    def test_cse_probe_rotation_selects_only_oldest_when_slot_is_due(self):
+    def test_confirmed_failure_recovers_as_a_runtime_canary_after_cooldown(self):
         app.ENGINE_HEALTH.clear()
-        app.ENGINE_COOLDOWNS.clear()
-        app.ENGINE_HEALTH.update({
-            "google cse": {"last_check": 1000},
-            "cse reddit": {"last_check": 500},
-        })
-        with (
-            patch.object(app, "ALLOWED_ENGINES", {"google cse", "cse reddit", "bing"}),
-            patch.object(app, "PROBE_INTERVAL_CSE", 480),
-        ):
-            self.assertIsNone(app._next_cse_probe(1239))
-            self.assertEqual(app._next_cse_probe(1240), "cse reddit")
+        app._record_probe("reddit", True, "access denied", None)
+        self.assertEqual(app._effective_status("reddit"), "degraded")
+        app._record_probe("reddit", True, "access denied", None)
+        self.assertEqual(app._effective_status("reddit"), "broken")
+        self.assertTrue(app._is_temporarily_unavailable("reddit"))
+        app.ENGINE_HEALTH["reddit"]["retry_after"] = time.time() - 1
+        self.assertEqual(app._effective_status("reddit"), "stale")
+        self.assertFalse(app._is_temporarily_unavailable("reddit"))
         app.ENGINE_HEALTH.clear()
 
 
 class AutoRoutingTests(unittest.IsolatedAsyncioTestCase):
+    async def test_runtime_failure_schedules_one_confirmation(self):
+        class Response:
+            def raise_for_status(self): pass
+            def json(self):
+                return {"query": "test", "results": [], "unresponsive_engines": [["bing", "access denied"]]}
+
+        class Client:
+            async def __aenter__(self): return self
+            async def __aexit__(self, *_args): pass
+            async def get(self, _url, params): return Response()
+
+        app.ENGINE_HEALTH.clear()
+        app.ENGINE_COOLDOWNS.clear()
+        app.SEARCH_CACHE.clear()
+        request = Request({"type": "http", "headers": [], "client": ("127.0.0.1", 1)})
+        with (
+            patch.object(app, "save_health"),
+            patch.object(app, "_schedule_confirmation") as schedule,
+            patch.object(app.httpx, "AsyncClient", return_value=Client()),
+        ):
+            await do_search(SearchBody(q="test", engines="bing", mode="fast"), request)
+        schedule.assert_called_once_with("bing")
+        self.assertEqual(app.ENGINE_HEALTH["bing"]["status"], "degraded")
+        app.ENGINE_HEALTH.clear()
+
     async def test_auto_falls_back_when_routed_cse_is_rate_limited(self):
         class Response:
             def raise_for_status(self):

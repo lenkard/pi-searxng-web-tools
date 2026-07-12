@@ -64,7 +64,7 @@ Install pi extension manually from a clone:
 - The FastAPI wrapper supports optional shared-key auth with `WEB_API_KEY`; the pi extension sends `PI_WEB_API_KEY` as `X-API-Key`.
 - The pi extension default API base URL is the private Kinkaid WireGuard address `http://172.25.0.7:8889`. Other deployments must override it with `PI_WEB_API_BASE_URL`.
 - The pi package installs only the extension. It must not assume Docker services are running; document that the SearXNG/FastAPI endpoint is required separately.
-- Never bulk-test CSEs repeatedly. Use `scripts/benchmark.py`; health monitoring rotates one CSE at a time across the configured interval.
+- Never bulk-test CSEs repeatedly. Health is driven by real searches; only a non-rate-limit failure receives one delayed confirmation request.
 
 ## Security
 

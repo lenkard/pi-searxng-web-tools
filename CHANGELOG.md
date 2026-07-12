@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.6.0 - 2026-07-12
+
+### Changed
+
+- Replaced scheduled engine sweeps with runtime-driven health: real searches now provide the primary success and failure observations.
+- A non-rate-limit failure receives one delayed confirmation request; rate limits are never immediately retried and Google CSEs retain their shared cooldown.
+- Confirmed failures become temporarily unavailable, then return as runtime canaries after cooldown; old observations are reported as stale instead of permanently blocking an engine.
+
 ## v1.5.4 - 2026-07-12
 
 ### Fixed

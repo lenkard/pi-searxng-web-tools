@@ -2,7 +2,7 @@
 
 Self-hosted web search and web page extraction for the [pi coding agent](https://github.com/mariozechner/pi-coding-agent).
 
-Current release: `v1.5.4`. See [`CHANGELOG.md`](CHANGELOG.md) for security, deployment, and benchmark notes.
+Current release: `v1.6.0`. See [`CHANGELOG.md`](CHANGELOG.md) for security, deployment, and benchmark notes.
 
 This project contains:
 
@@ -114,7 +114,7 @@ pi install git:github.com/lenkard/pi-searxng-web-tools
 Or pin to a release tag:
 
 ```bash
-pi install git:github.com/lenkard/pi-searxng-web-tools@v1.5.4
+pi install git:github.com/lenkard/pi-searxng-web-tools@v1.6.0
 ```
 
 Or install it only for the current project:
@@ -272,9 +272,9 @@ Free search modes:
 - `balanced` (default) scores relevance and domain diversity, querying one additional free engine only when the first response is weak.
 - `deep` combines up to three free engines using URL deduplication and reciprocal-rank fusion.
 
-The wrapper caches successful searches for 15 minutes by default and temporarily cools down engines that return CAPTCHA, 429, suspension, or access-denied diagnostics. A CSE rate limit cools the shared Google-CSE group. Automatic routing skips unavailable engines and falls back to the default chain.
+The wrapper caches successful searches for 15 minutes by default. CAPTCHA, 429, suspension, and rate-limit responses activate a cooldown; a CSE rate limit cools the shared Google-CSE group. Automatic routing skips unavailable engines and falls back to the default chain.
 
-Engine health is available from `/engines/health`. General engines are checked every 15 minutes. The 30 Google-backed CSE engines are rotated one at a time across a two-hour interval—roughly one probe every four minutes—so monitoring does not create a burst. Real searches also update health. Configure these controls with `SEARCH_CACHE_TTL_SECONDS`, `ENGINE_COOLDOWN_SECONDS`, `BALANCED_QUALITY_THRESHOLD`, `PROBE_INTERVAL_GENERAL`, and `PROBE_INTERVAL_CSE`.
+Engine health at `/engines/health` is driven by real searches. Success immediately marks an engine healthy. A non-rate-limit failure becomes degraded and receives one delayed confirmation request; a repeated failure becomes temporarily broken, then returns as a runtime canary after cooldown. Rate limits are never immediately retried. Healthy and unused engines are not probed, and observations older than a day are reported as stale. Configure this with `ENGINE_COOLDOWN_SECONDS`, `CONFIRM_FAILURE_DELAY_SECONDS`, and `HEALTH_STALE_SECONDS`.
 
 No Codex/OpenAI search is used, so searches do not consume the user's Codex allowance.
 
