@@ -2,7 +2,7 @@
 
 Self-hosted web search and web page extraction for the [pi coding agent](https://github.com/mariozechner/pi-coding-agent).
 
-Current release: `v1.6.0`. See [`CHANGELOG.md`](CHANGELOG.md) for security, deployment, and benchmark notes.
+Current release: `v1.6.1`. See [`CHANGELOG.md`](CHANGELOG.md) for security, deployment, and benchmark notes.
 
 This project contains:
 
@@ -114,7 +114,7 @@ pi install git:github.com/lenkard/pi-searxng-web-tools
 Or pin to a release tag:
 
 ```bash
-pi install git:github.com/lenkard/pi-searxng-web-tools@v1.6.0
+pi install git:github.com/lenkard/pi-searxng-web-tools@v1.6.1
 ```
 
 Or install it only for the current project:
@@ -274,7 +274,7 @@ Free search modes:
 
 The wrapper caches successful searches for 15 minutes by default. CAPTCHA, 429, and explicit rate-limit responses activate a cooldown; a CSE rate limit cools the shared Google-CSE group. Automatic routing skips unavailable engines and falls back to the default chain.
 
-Engine health at `/engines/health` is driven by real searches. Success immediately marks an engine healthy. A non-rate-limit failure becomes degraded and receives one delayed confirmation request; a repeated failure becomes temporarily broken, then returns as a runtime canary after cooldown. Rate limits are never immediately retried. Healthy and unused engines are not probed, and observations older than a day are reported as stale. Configure this with `ENGINE_COOLDOWN_SECONDS`, `CONFIRM_FAILURE_DELAY_SECONDS`, and `HEALTH_STALE_SECONDS`.
+Engine health at `/engines/health` is driven by real searches. Success immediately marks an engine healthy. A non-rate-limit failure becomes degraded and receives one delayed confirmation request; a repeated failure becomes temporarily broken, then returns as a runtime canary after cooldown. Rate limits are never immediately retried. Healthy and unused engines are not probed, and observations older than a day are reported as stale. Google-CSE requests are limited to one CSE per request and globally spaced by 10 seconds. Configure this with `ENGINE_COOLDOWN_SECONDS`, `CONFIRM_FAILURE_DELAY_SECONDS`, `HEALTH_STALE_SECONDS`, and `CSE_MIN_INTERVAL_SECONDS`.
 
 No Codex/OpenAI search is used, so searches do not consume the user's Codex allowance.
 

@@ -141,10 +141,13 @@ WEBFETCH_DATA_DIR = os.getenv("WEBFETCH_DATA_DIR", "/data")
 PROBE_QUERY = os.getenv("PROBE_QUERY", "open source software")
 CONFIRM_FAILURE_DELAY_SECONDS = max(1, int(os.getenv("CONFIRM_FAILURE_DELAY_SECONDS", "5")))
 HEALTH_STALE_SECONDS = max(60, int(os.getenv("HEALTH_STALE_SECONDS", "86400")))
+CSE_MIN_INTERVAL_SECONDS = max(0, float(os.getenv("CSE_MIN_INTERVAL_SECONDS", "10")))
 ENGINE_BROKEN_THRESHOLD = 2
 
 ENGINE_HEALTH: dict[str, dict[str, Any]] = {}
 CONFIRM_TASK: Optional[asyncio.Task] = None
+CSE_REQUEST_LOCK = asyncio.Lock()
+LAST_CSE_REQUEST = 0.0
 
 
 def _health_path() -> Path:
@@ -267,6 +270,8 @@ async def _confirm_failure(engine: str) -> None:
             return
         start = time.monotonic()
         try:
+            if is_google_cse(engine):
+                await _pace_cse_request()
             async with httpx.AsyncClient(timeout=20, headers={"User-Agent": USER_AGENT}) as client:
                 response = await client.get(SEARXNG_URL, params={
                     "q": PROBE_QUERY, "format": "json", "engines": engine, "pageno": 1,
@@ -306,7 +311,7 @@ async def lifespan(_app: FastAPI):
         save_health()
 
 
-app = FastAPI(title="Private Web Search/Fetch API", version="1.6.0", lifespan=lifespan)
+app = FastAPI(title="Private Web Search/Fetch API", version="1.6.1", lifespan=lifespan)
 
 
 class SearchBody(BaseModel):
@@ -466,6 +471,15 @@ def cache_key(body: SearchBody) -> str:
     return body.model_dump_json(exclude_none=True)
 
 
+async def _pace_cse_request() -> None:
+    global LAST_CSE_REQUEST
+    async with CSE_REQUEST_LOCK:
+        wait = CSE_MIN_INTERVAL_SECONDS - (time.monotonic() - LAST_CSE_REQUEST)
+        if wait > 0:
+            await asyncio.sleep(wait)
+        LAST_CSE_REQUEST = time.monotonic()
+
+
 async def do_search(body: SearchBody, request: Request):
     body.q = body.q.strip()
     if not body.q:
@@ -497,6 +511,8 @@ async def do_search(body: SearchBody, request: Request):
         unknown_engines = sorted(requested_engines - ALLOWED_ENGINES)
         if unknown_engines:
             raise HTTPException(status_code=400, detail=f"Unknown or disabled engines: {', '.join(unknown_engines)}")
+        if explicit_engines and sum(is_google_cse(engine) for engine in requested_engines) > 1:
+            raise HTTPException(status_code=400, detail="At most one Google CSE engine is allowed per request")
 
     now = time.monotonic()
     cached = SEARCH_CACHE.get(key)
@@ -558,6 +574,8 @@ async def do_search(body: SearchBody, request: Request):
             params = dict(base_params)
             if engine:
                 params["engines"] = engine
+            if any(is_google_cse(name) for name in names):
+                await _pace_cse_request()
             attempted_engines.append(engine_name)
             started = time.monotonic()
             try:

@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.6.1 - 2026-07-12
+
+### Changed
+
+- Standardized Pi searches on `engines=auto` and `mode=balanced`, with system-level guidance for query refinement, source fetching, and failure handling.
+- Added a packaged web-search skill covering normal use, safe verification, and troubleshooting.
+- Enforced at most one Google CSE per request and a configurable 10-second global minimum between CSE requests, including confirmation requests.
+
 ## v1.6.0 - 2026-07-12
 
 ### Changed

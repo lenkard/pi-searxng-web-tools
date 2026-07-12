@@ -48,7 +48,7 @@ const WebSearchParams = Type.Object({
 	pageno: Type.Optional(Type.Integer({ minimum: 1, default: 1, description: "Search result page number." })),
 	language: Type.Optional(Type.String({ default: "auto", description: "Language code, 'auto', or 'all'." })),
 	categories: Type.Optional(Type.String({ description: "Optional SearXNG categories, comma-separated, e.g. 'general,news'." })),
-	engines: Type.Optional(Type.String({ description: "Optional SearXNG engines, comma-separated, e.g. 'google cse', 'github', or 'arxiv'. Pass 'auto' to route by query keywords (e.g. Reddit/opinions, academic, errors, code, documents, social)." })),
+	engines: Type.Optional(Type.String({ default: "auto", description: "Use 'auto' unless the user explicitly requests a specific source. An explicit request may name general engines and at most one Google CSE." })),
 	time_range: Type.Optional(Type.String({ description: "Optional time range: day, month, or year." })),
 	mode: Type.Optional(StringEnum(["fast", "balanced", "deep"] as const, { description: "Search strategy: fast uses the first usable free engine; balanced adds a second engine only for weak results; deep combines up to three free engines." })),
 });
@@ -65,10 +65,11 @@ export default function webSearchFetchExtension(pi: ExtensionAPI) {
 		description: "Search the web using the local SearXNG-backed API and return JSON search results.",
 		promptSnippet: "Search the web using the local SearXNG-backed API",
 		promptGuidelines: [
-			"Use web_search when the user asks for current web information, internet research, recent docs, product pages, news, or URLs.",
-			"For focused technical searches, web_search can select google cse, github, arxiv, or wikipedia with the engines parameter instead of another general engine.",
-			"Pass engines='auto' to let the API route by query intent (Reddit/opinions, academic papers, errors/stack traces, code, documents, social).",
-			"After web_search finds a likely source, use web_fetch to retrieve the page text when details or citations are needed.",
+			"Canonical workflow: use engines='auto' and mode='balanced', then use web_fetch on promising results before relying on or citing them.",
+			"Choose an explicit engine only when the user explicitly requests that source; never send more than one Google CSE in a request.",
+			"Do not probe, sweep, benchmark, or cycle through engines. Do not repeat a rate-limited or unavailable-engine request; the API handles health, cooldowns, confirmation, recovery, and fallback.",
+			"If results are weak, refine the query once before changing mode or source. Use deep mode only when the user requests broad research.",
+			"Use web_search for current information, internet research, recent docs, product pages, news, or URLs. Use web_fetch for page details and citations.",
 		],
 		parameters: WebSearchParams,
 		async execute(_toolCallId, params, signal, onUpdate) {
@@ -80,7 +81,7 @@ export default function webSearchFetchExtension(pi: ExtensionAPI) {
 					pageno: params.pageno ?? 1,
 					language: params.language ?? "auto",
 					categories: params.categories,
-					engines: params.engines,
+					engines: params.engines ?? "auto",
 					time_range: params.time_range,
 					mode: params.mode ?? "balanced",
 				}, signal);
@@ -112,7 +113,7 @@ export default function webSearchFetchExtension(pi: ExtensionAPI) {
 				// the agent can adapt (retry, use web_fetch, or proceed without live web).
 				const message = asErrorText(error);
 				return {
-					content: [{ type: "text", text: `web_search is currently unavailable: ${message}\n\nThe search backend may be down or all engines are rate-limited. Suggested contingencies: retry once, use web_fetch on a known URL, or proceed using your existing knowledge and tell the user live web search is unavailable.` }],
+					content: [{ type: "text", text: `web_search is currently unavailable: ${message}\n\nDo not loop through engines. Retry once only for a transient connection error; never retry a reported rate limit. Otherwise use web_fetch on a known URL or proceed without live search and tell the user.` }],
 					details: { error: message, degraded: true },
 				};
 			}

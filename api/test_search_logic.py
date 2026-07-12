@@ -1,8 +1,9 @@
 import ipaddress
 import time
 import unittest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
+from fastapi import HTTPException
 from starlette.requests import Request
 
 import app
@@ -85,6 +86,34 @@ class SearchLogicTests(unittest.TestCase):
 
 
 class AutoRoutingTests(unittest.IsolatedAsyncioTestCase):
+    async def test_multiple_cses_are_rejected_before_upstream_request(self):
+        request = Request({"type": "http", "headers": [], "client": ("127.0.0.1", 1)})
+        with patch.object(app, "ALLOWED_ENGINES", {"google cse", "cse reddit"}):
+            with self.assertRaisesRegex(HTTPException, "At most one Google CSE"):
+                await do_search(SearchBody(q="test", engines="google cse,cse reddit"), request)
+
+    async def test_single_cse_is_globally_paced(self):
+        class Response:
+            def raise_for_status(self): pass
+            def json(self): return {"query": "test", "results": [], "unresponsive_engines": []}
+
+        class Client:
+            async def __aenter__(self): return self
+            async def __aexit__(self, *_args): pass
+            async def get(self, _url, params): return Response()
+
+        request = Request({"type": "http", "headers": [], "client": ("127.0.0.1", 1)})
+        pace = AsyncMock()
+        app.SEARCH_CACHE.clear()
+        with (
+            patch.object(app, "ALLOWED_ENGINES", {"cse reddit"}),
+            patch.object(app, "_pace_cse_request", pace),
+            patch.object(app, "save_health"),
+            patch.object(app.httpx, "AsyncClient", return_value=Client()),
+        ):
+            await do_search(SearchBody(q="test", engines="cse reddit", mode="fast"), request)
+        pace.assert_awaited_once()
+
     async def test_runtime_failure_schedules_one_confirmation(self):
         class Response:
             def raise_for_status(self): pass
