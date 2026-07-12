@@ -1,9 +1,14 @@
 from fastapi import FastAPI, HTTPException, Query, Request
 from pydantic import BaseModel, HttpUrl
 from typing import Any, Literal, Optional
+from contextlib import asynccontextmanager
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+from pathlib import Path
+import asyncio
 import copy
 import ipaddress
+import json
+import logging
 import os
 import re
 import secrets
@@ -14,6 +19,12 @@ import anyio
 import httpx
 import trafilatura
 from bs4 import BeautifulSoup
+
+logging.basicConfig(
+    level=os.getenv("LOG_LEVEL", "INFO").upper(),
+    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+)
+log = logging.getLogger("webfetch-api")
 
 SEARXNG_URL = os.getenv("SEARXNG_URL", "http://searxng:8080/search")
 SEARXNG_DEFAULT_ENGINES = os.getenv("SEARXNG_DEFAULT_ENGINES", "google cse,mojeek,yep,bing,mwmbl,wiby").strip()
@@ -97,7 +108,156 @@ ALLOWED_ENGINES = {
 SEARCH_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 ENGINE_COOLDOWNS: dict[str, tuple[float, str]] = {}
 
-app = FastAPI(title="Private Web Search/Fetch API", version="1.0.0")
+# --- Engine health monitoring ------------------------------------------------
+# A background task periodically probes each engine through SearXNG and records
+# whether it responds. Chronically broken engines are auto-excluded from
+# default searches so single-engine failures stop degrading results silently.
+# State persists to disk so restarts keep failure history. ponytail: one file,
+# in-process loop, no DB/HTML dashboard; this is an agent-facing tool, so the
+# JSON endpoints ARE the dashboard.
+WEBFETCH_DATA_DIR = os.getenv("WEBFETCH_DATA_DIR", "/data")
+PROBE_QUERY = os.getenv("PROBE_QUERY", "open source software")
+PROBE_INTERVAL_GENERAL = max(60, int(os.getenv("PROBE_INTERVAL_GENERAL", "900")))
+PROBE_INTERVAL_CSE = max(300, int(os.getenv("PROBE_INTERVAL_CSE", "7200")))
+PROBE_TICK_SECONDS = max(30, int(os.getenv("PROBE_TICK_SECONDS", "60")))
+PROBE_STAGGER_SECONDS = max(1, int(os.getenv("PROBE_STAGGER_SECONDS", "3")))
+PROBE_STARTUP_DELAY = max(0, int(os.getenv("PROBE_STARTUP_DELAY", "30")))
+ENGINE_BROKEN_THRESHOLD = max(1, int(os.getenv("ENGINE_BROKEN_THRESHOLD", "3")))
+
+ENGINE_HEALTH: dict[str, dict[str, Any]] = {}
+
+
+def _health_path() -> Path:
+    return Path(WEBFETCH_DATA_DIR) / "engine_health.json"
+
+
+def load_health() -> None:
+    try:
+        data = json.loads(_health_path().read_text())
+        if isinstance(data, dict):
+            ENGINE_HEALTH.update(data)
+        log.info("loaded engine health state for %d engines", len(ENGINE_HEALTH))
+    except FileNotFoundError:
+        pass
+    except Exception as error:
+        log.warning("could not load engine health state: %s", error)
+
+
+def save_health() -> None:
+    try:
+        path = _health_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(ENGINE_HEALTH))
+        tmp.replace(path)
+    except Exception as error:
+        log.warning("could not save engine health state: %s", error)
+
+
+def broken_engines() -> list[str]:
+    return sorted(name for name, state in ENGINE_HEALTH.items() if state.get("status") == "broken")
+
+
+def _unresponsive_reason(engine: str, unresponsive: list[Any]) -> Optional[str]:
+    for item in unresponsive or []:
+        if isinstance(item, (list, tuple)) and item and str(item[0]) == engine:
+            return str(item[1]) if len(item) > 1 else "unresponsive"
+    return None
+
+
+def _record_probe(engine: str, failed: bool, reason: Optional[str], latency_ms: Optional[int]) -> None:
+    now = time.time()
+    state = ENGINE_HEALTH.get(engine) or {
+        "status": "unknown", "last_check": 0, "last_success": 0,
+        "latency_ms": None, "consecutive_failures": 0, "last_error": None,
+    }
+    ENGINE_HEALTH[engine] = state
+    state["last_check"] = now
+    if not failed:
+        previous = state.get("status")
+        state.update(status="healthy", last_success=now, latency_ms=latency_ms,
+                     consecutive_failures=0, last_error=None)
+        if previous in ("broken", "rate_limited", "degraded", "unknown"):
+            log.info("ENGINE_RECOVER engine=%s prev=%s", engine, previous)
+        return
+    state["consecutive_failures"] = int(state.get("consecutive_failures", 0)) + 1
+    state["last_error"] = reason
+    is_rate_limit = bool(reason) and cooldown_reason([reason]) is not None
+    log.warning("ENGINE_FAIL engine=%s reason=%s", engine, reason)
+    if is_rate_limit:
+        state["status"] = "rate_limited"
+    elif state["consecutive_failures"] >= ENGINE_BROKEN_THRESHOLD:
+        if state.get("status") != "broken":
+            log.warning("ENGINE_BROKEN engine=%s failures=%s reason=%s",
+                        engine, state["consecutive_failures"], reason)
+        state["status"] = "broken"
+    else:
+        state["status"] = "degraded"
+
+
+async def _probe_one(engine: str) -> None:
+    start = time.monotonic()
+    failed = False
+    reason: Optional[str] = None
+    latency_ms: Optional[int] = None
+    try:
+        async with httpx.AsyncClient(timeout=20, headers={"User-Agent": USER_AGENT}) as client:
+            response = await client.get(SEARXNG_URL, params={
+                "q": PROBE_QUERY, "format": "json", "engines": engine, "pageno": 1,
+            })
+            response.raise_for_status()
+            payload = response.json()
+        reason = _unresponsive_reason(engine, payload.get("unresponsive_engines", []))
+        if reason:
+            failed = True
+        latency_ms = int((time.monotonic() - start) * 1000)
+    except Exception as error:
+        failed = True
+        reason = f"probe error: {error}"
+    _record_probe(engine, failed, reason, latency_ms)
+
+
+async def _probe_loop() -> None:
+    await asyncio.sleep(PROBE_STARTUP_DELAY)
+    while True:
+        try:
+            now = time.time()
+            probed = 0
+            for engine in sorted(ALLOWED_ENGINES):
+                interval = PROBE_INTERVAL_CSE if engine.startswith("cse ") else PROBE_INTERVAL_GENERAL
+                last = (ENGINE_HEALTH.get(engine) or {}).get("last_check", 0)
+                if now - last < interval:
+                    continue
+                await _probe_one(engine)
+                probed += 1
+                await asyncio.sleep(PROBE_STAGGER_SECONDS)
+            if probed:
+                log.info("PROBE swept=%d engines", probed)
+                save_health()
+        except asyncio.CancelledError:
+            raise
+        except Exception as error:
+            log.exception("probe loop error: %s", error)
+        await asyncio.sleep(PROBE_TICK_SECONDS)
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    load_health()
+    task = asyncio.create_task(_probe_loop())
+    log.info("STARTUP engine-health probe loop started")
+    try:
+        yield
+    finally:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+        save_health()
+
+
+app = FastAPI(title="Private Web Search/Fetch API", version="1.4.0", lifespan=lifespan)
 
 
 class SearchBody(BaseModel):
@@ -261,9 +421,13 @@ async def do_search(body: SearchBody, request: Request):
     # Explicit caller input keeps SearXNG's normal comma-separated aggregation.
     # The configured default is a sequential fallback chain, avoiding a blocked
     # engine poisoning a combined SearXNG response.
-    engine_attempts = [body.engines] if body.engines else [
-        engine.strip() for engine in SEARXNG_DEFAULT_ENGINES.split(",") if engine.strip()
-    ]
+    excluded_broken: list[str] = []
+    if body.engines:
+        engine_attempts = [body.engines]
+    else:
+        full_chain = [engine.strip() for engine in SEARXNG_DEFAULT_ENGINES.split(",") if engine.strip()]
+        excluded_broken = [engine for engine in full_chain if engine in broken_engines()]
+        engine_attempts = [engine for engine in full_chain if engine not in excluded_broken]
     if not engine_attempts:
         engine_attempts = [None]
 
@@ -372,6 +536,8 @@ async def do_search(body: SearchBody, request: Request):
     else:
         results = fuse_results(result_lists, max_results)
 
+    current_broken = broken_engines()
+    degraded = bool(current_broken) or bool(diagnostics)
     output = {
         "query": response_data.get("query", body.q),
         "results": results,
@@ -384,8 +550,15 @@ async def do_search(body: SearchBody, request: Request):
         "attempted_engines": attempted_engines,
         "skipped_engines": skipped_engines,
         "unresponsive_engines": diagnostics,
+        "broken_engines": current_broken,
+        "excluded_broken": excluded_broken,
+        "degraded": degraded,
         "cache_hit": False,
     }
+    if excluded_broken:
+        log.info("SEARCH_EXCLUDE_BROKEN query=%r engines=%s", body.q, excluded_broken)
+    if degraded:
+        log.info("SEARCH_DEGRADED query=%r broken=%s", body.q, current_broken)
     if SEARCH_CACHE_TTL_SECONDS > 0 and (results or output["answers"]):
         SEARCH_CACHE[key] = (now, copy.deepcopy(output))
     return output
@@ -430,6 +603,28 @@ async def fetch_url(url: str, max_chars: int):
     }
 
 
+def _engine_view(name: str) -> dict[str, Any]:
+    state = ENGINE_HEALTH.get(name) or {}
+    return {
+        "name": name,
+        "category": "cse" if name.startswith("cse ") else "general",
+        "status": state.get("status", "unknown"),
+        "last_check": state.get("last_check"),
+        "last_success": state.get("last_success"),
+        "latency_ms": state.get("latency_ms"),
+        "consecutive_failures": state.get("consecutive_failures", 0),
+        "last_error": state.get("last_error"),
+    }
+
+
+def _health_summary() -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for name in ALLOWED_ENGINES:
+        status = (ENGINE_HEALTH.get(name) or {}).get("status", "unknown")
+        counts[status] = counts.get(status, 0) + 1
+    return counts
+
+
 @app.get("/health")
 async def health():
     now = time.monotonic()
@@ -444,6 +639,24 @@ async def health():
         "default_engines": SEARXNG_DEFAULT_ENGINES,
         "cache_entries": len(SEARCH_CACHE),
         "engine_cooldowns": active_cooldowns,
+        "engine_health": _health_summary(),
+        "broken_engines": broken_engines(),
+    }
+
+
+@app.get("/engines")
+async def engines():
+    return {"engines": [_engine_view(name) for name in sorted(ALLOWED_ENGINES)]}
+
+
+@app.get("/engines/health")
+async def engines_health():
+    views = [_engine_view(name) for name in sorted(ALLOWED_ENGINES)]
+    return {
+        "summary": _health_summary(),
+        "broken": [v["name"] for v in views if v["status"] == "broken"],
+        "rate_limited": [v["name"] for v in views if v["status"] == "rate_limited"],
+        "engines": views,
     }
 
 
@@ -546,5 +759,20 @@ if __name__ == "__main__":
             assert exc.status_code == 400, host
         else:
             raise SystemExit(f"FAIL: {host} was not blocked")
-    print("SSRF self-check OK")
+
+    # Engine-health classification: N consecutive failures -> broken, then resets on success.
+    ENGINE_HEALTH.clear()
+    probe_engine = "__selftest_engine__"
+    for _ in range(ENGINE_BROKEN_THRESHOLD):
+        _record_probe(probe_engine, True, "probe error: simulated", None)
+    assert ENGINE_HEALTH[probe_engine]["status"] == "broken", ENGINE_HEALTH[probe_engine]
+    _record_probe(probe_engine, False, None, 123)
+    assert ENGINE_HEALTH[probe_engine]["status"] == "healthy", ENGINE_HEALTH[probe_engine]
+    assert ENGINE_HEALTH[probe_engine]["consecutive_failures"] == 0
+    # A rate-limit reason must classify as rate_limited, not broken.
+    _record_probe(probe_engine, True, "HTTP 429: too many requests", None)
+    assert ENGINE_HEALTH[probe_engine]["status"] == "rate_limited", ENGINE_HEALTH[probe_engine]
+    ENGINE_HEALTH.clear()
+
+    print("self-check OK")
     sys.exit(0)

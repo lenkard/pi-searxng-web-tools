@@ -97,12 +97,23 @@ export default function webSearchFetchExtension(pi: ExtensionAPI) {
 					? `\n\nUpstream engine failures: ${failures.map((item: any) => Array.isArray(item) ? item.join(": ") : String(item)).join("; ")}`
 					: "";
 
+				const broken = Array.isArray(data.broken_engines) ? data.broken_engines : [];
+				const brokenText = broken.length
+					? `\n\nNote: ${broken.length} search engine(s) are currently marked broken and were auto-excluded from this search (${broken.join(", ")}). Results may be limited; you can still request a specific engine with the engines parameter.`
+					: "";
+
 				return {
-					content: [{ type: "text", text: lines.length ? `${lines.join("\n\n")}${failureText}` : `No search results found.${failureText}` }],
+					content: [{ type: "text", text: lines.length ? `${lines.join("\n\n")}${failureText}${brokenText}` : `No search results found.${failureText}${brokenText}` }],
 					details: data,
 				};
 			} catch (error) {
-				throw new Error(`web_search failed: ${asErrorText(error)}`);
+				// Contingency: surface the failure to the agent instead of throwing, so
+				// the agent can adapt (retry, use web_fetch, or proceed without live web).
+				const message = asErrorText(error);
+				return {
+					content: [{ type: "text", text: `web_search is currently unavailable: ${message}\n\nThe search backend may be down or all engines are rate-limited. Suggested contingencies: retry once, use web_fetch on a known URL, or proceed using your existing knowledge and tell the user live web search is unavailable.` }],
+					details: { error: message, degraded: true },
+				};
 			}
 		},
 	});

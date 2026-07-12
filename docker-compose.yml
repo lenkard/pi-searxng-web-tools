@@ -38,6 +38,10 @@ services:
       # Optional shared secret for /websearch and /webfetch.
       # If set, clients must send X-API-Key or Authorization: Bearer <key>.
       WEB_API_KEY: ${WEB_API_KEY:-}
+    volumes:
+      # Persists engine-health probe history across restarts.
+      - webfetch-data:/data
 
 volumes:
   searxng-cache:
+  webfetch-data:

@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased (v1.5.0)
+
+### Engine health monitoring and resilience
+
+- Added an in-process engine-health monitor that probes each engine through SearXNG on a tiered schedule (general engines ~15 min, public CSEs ~2h to respect quotas) and persists state to a volume so restarts keep failure history.
+- Chronically broken engines (configurable consecutive-failure threshold) are now auto-excluded from default searches, so single-engine failures no longer silently degrade results.
+- Failures classify as `rate_limited` vs `broken`; recovery is detected and logged.
+
+### Agent-facing observability
+
+- New `GET /engines` and `GET /engines/health` endpoints expose per-engine status (healthy / degraded / rate_limited / broken / unknown), latency, last success, and failure counts as JSON for the Pi agent to read.
+- `/health` now includes an `engine_health` summary and `broken_engines` list.
+- Search responses now include `degraded`, `broken_engines`, and `excluded_broken` so the agent knows when results are impacted.
+
+### Skill contingency and logging
+
+- The `web_search` skill no longer hard-crashes when the backend is unreachable; it returns a degraded message with fallback suggestions so the agent can adapt.
+- The skill surfaces chronically broken engines in its output.
+- Added structured, greppable logging (`ENGINE_FAIL`, `ENGINE_BROKEN`, `ENGINE_RECOVER`, `SEARCH_DEGRADED`, `PROBE`) to aid diagnosis via `docker compose logs`.
+
 ## v1.4.0 - 2026-07-12
 
 ### Supply-chain and maintenance
