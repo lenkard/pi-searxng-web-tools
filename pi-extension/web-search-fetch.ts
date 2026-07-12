@@ -2,7 +2,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { StringEnum } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
 
-const DEFAULT_BASE_URL = "http://172.17.0.1:8889";
+const DEFAULT_BASE_URL = "http://172.25.0.7:8889"; // Kinkaid via WireGuard
 
 function getBaseUrl(): string {
 	return (process.env.PI_WEB_API_BASE_URL || DEFAULT_BASE_URL).replace(/\/+$/, "");

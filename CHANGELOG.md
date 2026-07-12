@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.5.1 - 2026-07-12
+
+### Fixed
+
+- Skill `DEFAULT_BASE_URL` corrected from `172.17.0.1` (Docker bridge, only works from a container on the API host) to `172.25.0.7` (Kinkaid via WireGuard), the address the agent host actually reaches the API on.
+
 ## v1.5.0 - 2026-07-12
 
 ### Engine health monitoring and resilience
