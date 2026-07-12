@@ -272,7 +272,7 @@ Free search modes:
 - `balanced` (default) scores relevance and domain diversity, querying one additional free engine only when the first response is weak.
 - `deep` combines up to three free engines using URL deduplication and reciprocal-rank fusion.
 
-The wrapper caches successful searches for 15 minutes by default. CAPTCHA, 429, suspension, and rate-limit responses activate a cooldown; a CSE rate limit cools the shared Google-CSE group. Automatic routing skips unavailable engines and falls back to the default chain.
+The wrapper caches successful searches for 15 minutes by default. CAPTCHA, 429, and explicit rate-limit responses activate a cooldown; a CSE rate limit cools the shared Google-CSE group. Automatic routing skips unavailable engines and falls back to the default chain.
 
 Engine health at `/engines/health` is driven by real searches. Success immediately marks an engine healthy. A non-rate-limit failure becomes degraded and receives one delayed confirmation request; a repeated failure becomes temporarily broken, then returns as a runtime canary after cooldown. Rate limits are never immediately retried. Healthy and unused engines are not probed, and observations older than a day are reported as stale. Configure this with `ENGINE_COOLDOWN_SECONDS`, `CONFIRM_FAILURE_DELAY_SECONDS`, and `HEALTH_STALE_SECONDS`.
 

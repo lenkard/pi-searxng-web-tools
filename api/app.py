@@ -218,7 +218,7 @@ def _unresponsive_reason(engine: str, unresponsive: list[Any]) -> Optional[str]:
 
 def _is_rate_limit(reason: Optional[str]) -> bool:
     text = (reason or "").lower()
-    return any(marker in text for marker in ("captcha", "too many requests", "suspended", "rate limit", "429"))
+    return any(marker in text for marker in ("captcha", "too many requests", "rate limit", "429"))
 
 
 def _record_probe(engine: str, failed: bool, reason: Optional[str], latency_ms: Optional[int]) -> None:
@@ -424,7 +424,7 @@ def fuse_results(result_lists: list[list[dict[str, Any]]], max_results: int) -> 
 
 def cooldown_reason(diagnostics: list[Any]) -> Optional[str]:
     text = " ".join(str(item) for item in diagnostics).lower()
-    markers = ("captcha", "too many requests", "suspended", "rate limit", "429")
+    markers = ("captcha", "too many requests", "rate limit", "429")
     return next((marker for marker in markers if marker in text), None)
 
 

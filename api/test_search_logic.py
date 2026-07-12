@@ -75,7 +75,7 @@ class SearchLogicTests(unittest.TestCase):
         app.ENGINE_HEALTH.clear()
         app._record_probe("reddit", True, "access denied", None)
         self.assertEqual(app._effective_status("reddit"), "degraded")
-        app._record_probe("reddit", True, "access denied", None)
+        app._record_probe("reddit", True, "Suspended: access denied", None)
         self.assertEqual(app._effective_status("reddit"), "broken")
         self.assertTrue(app._is_temporarily_unavailable("reddit"))
         app.ENGINE_HEALTH["reddit"]["retry_after"] = time.time() - 1
