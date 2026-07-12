@@ -1,5 +1,29 @@
 # Changelog
 
+## v1.3.0 - 2026-07-12
+
+### Search providers
+
+- Added 29 selectable public OSINT Google CSEs for Reddit, social, documents, files, fact-checking, government, and other focused searches.
+- Enabled keyless bot-friendly SearXNG providers including Crossref, GitLab, GitHub Code, Hacker News, OpenAlex, Stack Overflow, and Semantic Scholar.
+- Disabled the broken PyPI HTML engine; PyPI currently serves a JavaScript challenge and upstream SearXNG issue #4093 remains open.
+
+### SearXNG compatibility
+
+- Added a patched SearXNG image that initializes custom Google CSE instances without the missing `supported_domains` trait.
+- Persisted the patch in a derived Docker image and removed stale Python bytecode during builds.
+
+### API reliability
+
+- Reject empty queries, invalid pages/result limits, and unknown or disabled engines instead of silently running default providers.
+- Convert knowledge-engine infoboxes, including Wikipedia answers, into normal agent-visible results.
+- Preserve adaptive fallback, caching, cooldowns, result fusion, and upstream diagnostics.
+
+### Testing
+
+- Added the comprehensive search relevance/reliability benchmark script.
+- Tested all 29 public CSEs, focused API engines, search modes, caching, pagination, aliases, fetching, validation, and concurrent requests.
+
 ## v1.2.2 - 2026-07-10
 
 ### Search engines

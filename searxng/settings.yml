@@ -13,7 +13,14 @@ use_default_settings:
       - wikipedia
       - github
       - arxiv
-      - pypi
+      - semantic scholar
+      - stackoverflow
+      - reddit
+      - openalex
+      - hackernews
+      - github code
+      - gitlab
+      - crossref
 
 server:
   # server.secret_key is provided by the SEARXNG_SECRET environment variable.
@@ -50,3 +57,152 @@ outgoing:
   pool_connections: 100
   pool_maxsize: 20
   enable_http2: true
+
+# Public specialized Google CSEs curated from Provereno-Media/OSINT-CSE
+# and Awesome-Search-Engines-for-Cybersecurity-Researchers. No private CX.
+engines:
+  - name: cse people
+    engine: google_cse
+    disabled: true
+    shortcut: pcse1
+    CX: "partner-pub-7233843800519946:6667570044"
+  - name: cse instagram threads
+    engine: google_cse
+    disabled: true
+    shortcut: pcse2
+    CX: "87038a55364fd4bfd"
+  - name: cse facebook
+    engine: google_cse
+    disabled: true
+    shortcut: pcse3
+    CX: "b7a0458303c464dfd"
+  - name: cse social
+    engine: google_cse
+    disabled: true
+    shortcut: pcse4
+    CX: "029ffbc44aa3946cb"
+  - name: cse social vortimo
+    engine: google_cse
+    disabled: true
+    shortcut: pcse5
+    CX: "009983555355237802955:_kirhgouogi"
+  - name: cse reddit
+    engine: google_cse
+    disabled: true
+    shortcut: pcse6
+    CX: "007749065626525752968:qh5bqebwi30"
+  - name: cse tiktok
+    engine: google_cse
+    disabled: true
+    shortcut: pcse7
+    CX: "011444696387487602669:aqf7d9w73om"
+  - name: cse iran social
+    engine: google_cse
+    disabled: true
+    shortcut: pcse8
+    CX: "a69e29b24a5804272"
+  - name: cse linkedin uk
+    engine: google_cse
+    disabled: true
+    shortcut: pcse9
+    CX: "006639709984028990467:nl9wxsfepb0"
+  - name: cse australia jobs
+    engine: google_cse
+    disabled: true
+    shortcut: pcse10
+    CX: "b176f3be81f18412b"
+  - name: cse headhunter
+    engine: google_cse
+    disabled: true
+    shortcut: pcse11
+    CX: "871c0071ee7ea4c00"
+  - name: cse fbi wanted
+    engine: google_cse
+    disabled: true
+    shortcut: pcse12
+    CX: "1ee952e6584aa91f9"
+  - name: cse ofac sanctions
+    engine: google_cse
+    disabled: true
+    shortcut: pcse13
+    CX: "e96467889fb82b9b0"
+  - name: cse documents
+    engine: google_cse
+    disabled: true
+    shortcut: pcse14
+    CX: "e6756edc507bcfa91"
+  - name: cse documents 2
+    engine: google_cse
+    disabled: true
+    shortcut: pcse15
+    CX: "009462381166450434430:nudphlkt3p4"
+  - name: cse documents 3
+    engine: google_cse
+    disabled: true
+    shortcut: pcse16
+    CX: "001788166376325824197:ff1tsbv1c6m"
+  - name: cse russian courts
+    engine: google_cse
+    disabled: true
+    shortcut: pcse17
+    CX: "174a936942534442e"
+  - name: cse russian courts filtered
+    engine: google_cse
+    disabled: true
+    shortcut: pcse18
+    CX: "975065745f9cc405d"
+  - name: cse central asia stats
+    engine: google_cse
+    disabled: true
+    shortcut: pcse19
+    CX: "a72e762da6ab1440a"
+  - name: cse baltic stats
+    engine: google_cse
+    disabled: true
+    shortcut: pcse20
+    CX: "a6f66d6fd28f54534"
+  - name: cse wikileaks
+    engine: google_cse
+    disabled: true
+    shortcut: pcse21
+    CX: "000893276566003557773:imp7zqctk60"
+  - name: cse fact checks
+    engine: google_cse
+    disabled: true
+    shortcut: pcse22
+    CX: "63511be8f42c947cd"
+  - name: cse file sharing
+    engine: google_cse
+    disabled: true
+    shortcut: pcse23
+    CX: "f466f6ea4886845d1"
+  - name: cse amazon cloud
+    engine: google_cse
+    disabled: true
+    shortcut: pcse24
+    CX: "005797772976587943970:g-6ohngosio"
+  - name: cse google drive
+    engine: google_cse
+    disabled: true
+    shortcut: pcse25
+    CX: "c64ba311eb8c31896"
+  - name: cse slideshare
+    engine: google_cse
+    disabled: true
+    shortcut: pcse26
+    CX: "465eeeb114c7f523f"
+  - name: cse webcams
+    engine: google_cse
+    disabled: true
+    shortcut: pcse27
+    CX: "013991603413798772546:gjcdtyiytey"
+  - name: cse telegram
+    engine: google_cse
+    disabled: true
+    shortcut: pcse28
+    CX: "006368593537057042503:efxu7xprihg"
+  - name: cse slack discord
+    engine: google_cse
+    disabled: true
+    shortcut: pcse29
+    CX: "96ed537ad13f04565"

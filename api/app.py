@@ -19,6 +19,22 @@ ENGINE_COOLDOWN_SECONDS = max(10, int(os.getenv("ENGINE_COOLDOWN_SECONDS", "300"
 BALANCED_QUALITY_THRESHOLD = min(1.0, max(0.0, float(os.getenv("BALANCED_QUALITY_THRESHOLD", "0.58"))))
 USER_AGENT = os.getenv("WEB_API_USER_AGENT", "Mozilla/5.0 (compatible; private-web-api/1.0)")
 WEB_API_KEY = os.getenv("WEB_API_KEY", "")
+DEFAULT_ALLOWED_ENGINES = """
+google cse,mojeek,yep,bing,mwmbl,wiby,wikipedia,github,arxiv,
+crossref,gitlab,github code,hackernews,openalex,stackoverflow,semantic scholar,
+cse people,cse instagram threads,cse facebook,cse social,cse social vortimo,
+cse reddit,cse tiktok,cse iran social,cse linkedin uk,cse australia jobs,
+cse headhunter,cse fbi wanted,cse ofac sanctions,cse documents,cse documents 2,
+cse documents 3,cse russian courts,cse russian courts filtered,
+cse central asia stats,cse baltic stats,cse wikileaks,cse fact checks,
+cse file sharing,cse amazon cloud,cse google drive,cse slideshare,cse webcams,
+cse telegram,cse slack discord
+"""
+ALLOWED_ENGINES = {
+    engine.strip()
+    for engine in os.getenv("SEARXNG_ALLOWED_ENGINES", DEFAULT_ALLOWED_ENGINES).split(",")
+    if engine.strip()
+}
 
 SEARCH_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 ENGINE_COOLDOWNS: dict[str, tuple[float, str]] = {}
@@ -150,6 +166,19 @@ def cache_key(body: SearchBody) -> str:
 
 
 async def do_search(body: SearchBody, request: Request):
+    body.q = body.q.strip()
+    if not body.q:
+        raise HTTPException(status_code=400, detail="Search query cannot be empty")
+    if body.pageno < 1:
+        raise HTTPException(status_code=400, detail="pageno must be at least 1")
+    if body.max_results < 1 or body.max_results > 50:
+        raise HTTPException(status_code=400, detail="max_results must be between 1 and 50")
+    if body.engines:
+        requested_engines = {engine.strip() for engine in body.engines.split(",") if engine.strip()}
+        unknown_engines = sorted(requested_engines - ALLOWED_ENGINES)
+        if unknown_engines:
+            raise HTTPException(status_code=400, detail=f"Unknown or disabled engines: {', '.join(unknown_engines)}")
+
     key = cache_key(body)
     now = time.monotonic()
     cached = SEARCH_CACHE.get(key)
@@ -233,6 +262,26 @@ async def do_search(body: SearchBody, request: Request):
                         "publishedDate": item.get("publishedDate") or item.get("pubdate"),
                     }
                 )
+
+            # Some knowledge engines (notably Wikipedia) return only an
+            # infobox. Convert it to a normal result so agent callers do not
+            # receive a misleading empty response.
+            if not raw_results:
+                for infobox in candidate.get("infoboxes", []):
+                    urls = infobox.get("urls") or []
+                    url = infobox.get("id") or (urls[0].get("url") if urls else None)
+                    if not url:
+                        continue
+                    raw_results.append(
+                        {
+                            "title": infobox.get("infobox") or infobox.get("title"),
+                            "url": url,
+                            "content": infobox.get("content"),
+                            "engine": infobox.get("engine"),
+                            "score": 1.0,
+                            "publishedDate": None,
+                        }
+                    )
 
             if candidate.get("answers") and not response_data.get("answers"):
                 response_data = candidate

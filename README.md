@@ -240,6 +240,14 @@ The example SearXNG `settings.yml` enables JSON results and keeps a small engine
 google cse, bing, mojeek, yep, mwmbl, wiby, wikipedia, github, arxiv, pypi
 ```
 
+Additional bot-friendly engines enabled for explicit selection:
+
+```text
+crossref, gitlab, github code, hackernews, openalex, reddit, stackoverflow, semantic scholar
+```
+
+The configuration also registers 29 disabled-by-default public specialized CSEs from the reviewed OSINT collections. Select them explicitly with names such as `cse reddit`, `cse documents`, `cse social`, or `cse fact checks`. These third-party CSEs are not controlled by this project; some currently return Google parsing errors through SearXNG even when their hosted browser interface still works.
+
 Operational notes from testing on a new OCI datacenter IP (2026-07-10):
 
 - `google cse`, `bing`, `mojeek`, `yep`, `mwmbl`, and `wiby` returned results during testing. Google CSE gave the strongest technical result set; Mwmbl and Wiby have much smaller indexes.

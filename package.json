@@ -1,6 +1,6 @@
 {
   "name": "pi-searxng-web-tools",
-  "version": "1.2.2",
+  "version": "1.3.0",
   "description": "Pi package providing web_search and web_fetch tools backed by a local SearXNG/FastAPI endpoint.",
   "license": "MIT",
   "keywords": [

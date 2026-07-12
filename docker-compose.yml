@@ -1,6 +1,7 @@
 services:
   searxng:
-    image: searxng/searxng:latest
+    build: ./searxng
+    image: pi-searxng-patched:latest
     container_name: searxng
     restart: unless-stopped
     ports:
@@ -13,6 +14,9 @@ services:
       FORCE_OWNERSHIP: "true"
     volumes:
       - ./searxng:/etc/searxng
+      # Patch custom Google CSE instances missing supported_domains traits.
+      - ./searxng/engines/google_cse.py:/usr/local/searxng/searx/engines/google_cse.py:ro
+      - ./searxng/engines/google.py:/usr/local/searxng/searx/engines/google.py:ro
       - searxng-cache:/var/cache/searxng
 
   webfetch-api:
