@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased (v1.4.0)
+
+### Supply-chain and maintenance
+
+- Pinned the SearXNG and Python base images to immutable registry digests in both Dockerfiles.
+- Pinned all Python dependencies in `api/requirements.txt` to exact versions.
+- Added Dependabot configuration for Docker image digests, pip packages, and GitHub Actions, grouped to reduce PR noise.
+
 ## v1.3.0 - 2026-07-12
 
 ### Search providers
