@@ -1,6 +1,6 @@
 # Z.AI MCP integration plan
 
-Status: approved and implemented locally; production deployment pending
+Status: implemented and deployed to Kinkaid
 
 Research: [`research/zai-web-search-mcp.md`](research/zai-web-search-mcp.md)
 
@@ -213,3 +213,15 @@ The user approved:
 1. **Test seam:** mocked SearXNG engine interfaces, followed by one controlled live query per provider.
 2. **Rollout:** explicit verification first, then Z.AI primary and Serper secondary in the default provider chain.
 3. **Expanded scope:** complete Serper as a general-search provider rather than discarding it.
+
+## Verification result
+
+Deployed commit `cb9ca7e` to Kinkaid on 2026-07-17. Controlled production checks confirmed:
+
+- explicit Z.AI MCP search returned normalized results without degradation;
+- an identical Z.AI request was served from the wrapper cache;
+- explicit Serper search returned normalized results without degradation;
+- the normal default route selected Z.AI from `zai,serper,bing,yep,mwmbl,wiby`;
+- both providers appear in `/engines`;
+- provider keys had zero matches in recent SearXNG/FastAPI logs;
+- GitHub CI completed successfully.
