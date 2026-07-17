@@ -25,6 +25,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Provider engine unit tests
+        # Protocol/API behavior is mocked; CI never calls live providers or uses real keys.
+        run: python3 -m unittest -v searxng/engines/test_provider_engines.py
+
       - name: Build images
         # Validates that the pinned digests resolve and the SearXNG patch builds.
         run: docker compose build

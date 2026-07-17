@@ -18,6 +18,9 @@ services:
       - ./searxng/engines/google_cse.py:/usr/local/searxng/searx/engines/google_cse.py:ro
       - ./searxng/engines/google.py:/usr/local/searxng/searx/engines/google.py:ro
       - searxng-cache:/var/cache/searxng
+    secrets:
+      - zai_api_key
+      - serper_api_key
 
   webfetch-api:
     build: ./api
@@ -54,3 +57,9 @@ services:
 volumes:
   searxng-cache:
   webfetch-data:
+
+secrets:
+  zai_api_key:
+    file: ${ZAI_API_KEY_FILE:-./searxng/secret-placeholders/zai_api_key}
+  serper_api_key:
+    file: ${SERPER_API_KEY_FILE:-./searxng/secret-placeholders/serper_api_key}

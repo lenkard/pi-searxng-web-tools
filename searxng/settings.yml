@@ -58,9 +58,28 @@ outgoing:
   pool_maxsize: 20
   enable_http2: true
 
+# API providers use Docker secrets mounted at /run/secrets/*.
+engines:
+  - name: zai
+    engine: zai
+    categories: [general, web]
+    shortcut: zai
+    paging: false
+    time_range_support: true
+    timeout: 15.0
+    content_size: medium
+    location: us
+
+  - name: serper
+    engine: serper
+    categories: [general, web]
+    shortcut: spr
+    paging: true
+    time_range_support: true
+    timeout: 10.0
+
 # Public specialized Google CSEs curated from Provereno-Media/OSINT-CSE
 # and Awesome-Search-Engines-for-Cybersecurity-Researchers. No private CX.
-engines:
   - name: cse people
     engine: google_cse
     disabled: true

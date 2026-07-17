@@ -11,29 +11,43 @@ Requires PyYAML (``pip install pyyaml``). For the live, runtime view use the
 """
 import sys
 from pathlib import Path
-
-import yaml
+from typing import Any
 
 SETTINGS = Path(__file__).resolve().parent.parent / "searxng" / "settings.yml"
 
 
-def main() -> int:
-    data = yaml.safe_load(SETTINGS.read_text()) or {}
+def engine_rows(data: dict[str, Any]) -> list[tuple[str, str]]:
     keep_only = (
         ((data.get("use_default_settings") or {}).get("engines") or {}).get("keep_only") or []
     )
-    custom = [
-        entry.get("name")
+    custom = {
+        entry.get("name"): entry.get("engine")
         for entry in (data.get("engines") or [])
         if isinstance(entry, dict) and entry.get("name")
-    ]
-    print(f"_{len(keep_only) + len(custom)} engines_\n")
+    }
+    names = list(dict.fromkeys([*keep_only, *custom]))
+    rows = []
+    for name in names:
+        engine_type = custom.get(name)
+        if engine_type == "google_cse":
+            label = "Google CSE"
+        elif engine_type:
+            label = "provider"
+        else:
+            label = "built-in"
+        rows.append((name, label))
+    return rows
+
+
+def main() -> int:
+    import yaml
+
+    rows = engine_rows(yaml.safe_load(SETTINGS.read_text()) or {})
+    print(f"_{len(rows)} engines_\n")
     print("| Engine | Type |")
     print("| --- | --- |")
-    for name in keep_only:
-        print(f"| {name} | built-in |")
-    for name in custom:
-        print(f"| {name} | Google CSE |")
+    for name, label in rows:
+        print(f"| {name} | {label} |")
     return 0
 
 

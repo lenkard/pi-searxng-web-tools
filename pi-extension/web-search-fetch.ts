@@ -50,7 +50,7 @@ const WebSearchParams = Type.Object({
 	categories: Type.Optional(Type.String({ description: "Optional SearXNG categories, comma-separated, e.g. 'general,news'." })),
 	engines: Type.Optional(Type.String({ default: "auto", description: "Use 'auto' unless the user explicitly requests a specific source. An explicit request may name general engines and at most one Google CSE." })),
 	time_range: Type.Optional(Type.String({ description: "Optional time range: day, month, or year." })),
-	mode: Type.Optional(StringEnum(["fast", "balanced", "deep"] as const, { description: "Search strategy: fast uses the first usable free engine; balanced adds a second engine only for weak results; deep combines up to three free engines." })),
+	mode: Type.Optional(StringEnum(["fast", "balanced", "deep"] as const, { description: "Search strategy: fast uses the first usable provider; balanced adds a second provider only for weak results; deep combines up to three providers." })),
 });
 
 const WebFetchParams = Type.Object({

@@ -373,7 +373,7 @@ def canonical_url(raw_url: str) -> str:
 
 
 def result_quality(query: str, results: list[dict[str, Any]]) -> float:
-    """Cheap relevance signal used only to decide whether another free engine is needed."""
+    """Cheap relevance signal used only to decide whether another provider is needed."""
     if not results:
         return 0.0
 

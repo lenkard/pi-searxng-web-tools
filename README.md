@@ -68,6 +68,25 @@ PY
 
 Put the generated value into `SEARXNG_SECRET` in `.env`. The committed `searxng/settings.yml` does not contain secrets.
 
+To enable the hosted providers, save each key in an ignored file and point Compose at it:
+
+```bash
+mkdir -p searxng/secrets
+chmod 700 searxng/secrets
+read -rsp 'Z.AI key: ' ZAI_KEY; printf '\n'; printf '%s\n' "$ZAI_KEY" > searxng/secrets/zai_api_key; unset ZAI_KEY
+read -rsp 'Serper key: ' SERPER_KEY; printf '\n'; printf '%s\n' "$SERPER_KEY" > searxng/secrets/serper_api_key; unset SERPER_KEY
+chmod 600 searxng/secrets/*_api_key
+cat >> .env <<'EOF'
+ZAI_API_KEY_FILE=./searxng/secrets/zai_api_key
+SERPER_API_KEY_FILE=./searxng/secrets/serper_api_key
+SEARXNG_DEFAULT_ENGINES=zai,serper,bing,yep,mwmbl,wiby
+EOF
+```
+
+Without provider keys, Compose mounts tracked empty placeholders. Set
+`SEARXNG_DEFAULT_ENGINES=bing,yep,mwmbl,wiby` in `.env` to use only the free
+fallback engines.
+
 3. Start the services:
 
 ```bash
@@ -239,8 +258,18 @@ Check connectivity from pi with:
 The example SearXNG `settings.yml` enables JSON results and keeps a small engine set that tested well from this Docker/container environment:
 
 ```text
-bing, yep, mwmbl, wiby, wikipedia, github, arxiv, crossref, gitlab, github code, hackernews, openalex, reddit, stackoverflow, semantic scholar, mojeek, google cse
+zai, serper, bing, yep, mwmbl, wiby, wikipedia, github, arxiv, crossref, gitlab, github code, hackernews, openalex, reddit, stackoverflow, semantic scholar, mojeek, google cse
 ```
+
+`zai` and `serper` are native SearXNG provider engines. `zai` connects to
+Z.AI's remote Streamable HTTP MCP server and calls `web_search_prime`; `serper`
+calls Serper's official Google Search API. Their keys are read from Docker
+secrets at `/run/secrets/zai_api_key` and `/run/secrets/serper_api_key`; keys do
+not belong in `settings.yml`, committed `.env` files, URLs, or logs.
+
+Z.AI MCP does not expose result count or pagination. It currently returns up to
+ten results, which the wrapper truncates to `max_results`; use Serper or another
+paging engine when later result pages are required.
 
 Additional bot-friendly engines enabled for explicit selection:
 
@@ -258,19 +287,28 @@ Operational notes from testing on a new OCI datacenter IP (2026-07-10):
 - The direct `google` scraper is marked inactive and `stackexchange` was not available in the tested SearXNG 2026.7.9 image.
 - Upstream behavior is IP- and time-dependent. Even currently working scraping engines may later block a datacenter IP; use an official API provider as the primary source for reliable production use.
 
-The wrapper uses `bing,yep,mwmbl,wiby` as a **sequential fallback chain**. Google CSE remains available for focused and explicit searches but is not routine default traffic because all CSEs share one Google-facing residential IP. Override the chain without rebuilding:
+With provider key files configured, the wrapper uses
+`zai,serper,bing,yep,mwmbl,wiby` as a **sequential provider/fallback chain**.
+Z.AI MCP is primary, Serper is the managed general-search fallback, and the
+remaining engines avoid paid API usage when both are unavailable. Select either
+provider explicitly with `engines=zai` or `engines=serper`. Google CSE remains
+available for focused explicit searches but is not routine default traffic
+because all CSEs share one Google-facing residential IP. Override the chain
+without rebuilding:
 
 ```bash
+SEARXNG_DEFAULT_ENGINES=zai,serper,bing,yep,mwmbl,wiby docker compose up -d
+# or, without hosted-provider keys:
 SEARXNG_DEFAULT_ENGINES=bing,yep,mwmbl,wiby docker compose up -d
 ```
 
 Callers can always override this behavior with the `engines` tool parameter; an explicit comma-separated value uses SearXNG's normal aggregation.
 
-Free search modes:
+Search modes:
 
-- `fast` stops at the first non-empty engine response.
-- `balanced` (default) scores relevance and domain diversity, querying one additional free engine only when the first response is weak.
-- `deep` combines up to three free engines using URL deduplication and reciprocal-rank fusion.
+- `fast` stops at the first non-empty provider response.
+- `balanced` (default) scores relevance and domain diversity, querying one additional provider only when the first response is weak.
+- `deep` combines up to three providers using URL deduplication and reciprocal-rank fusion.
 
 The wrapper caches successful searches for 15 minutes by default. CAPTCHA, 429, and explicit rate-limit responses activate a cooldown; a CSE rate limit cools the shared Google-CSE group. Automatic routing skips unavailable engines and falls back to the default chain.
 
@@ -346,6 +384,7 @@ These numbers depend heavily on network, upstream engines, cache state and targe
 - SearXNG itself has no API password by default; `server.secret_key` is not access control.
 - Do not expose port `8889` or `8888` publicly without a reverse proxy, authentication, and rate limiting.
 - Keep `.env` private because it contains `SEARXNG_SECRET` and may contain `WEB_API_KEY`.
+- Keep `searxng/secrets/` private; it contains provider API keys for the native engines.
 - Public SearXNG instances can attract abusive traffic. Keep this private unless you know how to operate a public instance safely.
 - `/webfetch` fetches arbitrary URLs, so public exposure can create SSRF/open-proxy risk. Keep it private or protect it with auth and network filtering.
 

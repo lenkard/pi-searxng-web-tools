@@ -2,4 +2,6 @@ FROM searxng/searxng:latest@sha256:aaf56bb5ad737d48a8a375778d42eb4ab1757231e6b1e
 
 COPY engines/google.py /usr/local/searxng/searx/engines/google.py
 COPY engines/google_cse.py /usr/local/searxng/searx/engines/google_cse.py
-RUN rm -f /usr/local/searxng/searx/engines/__pycache__/google*.pyc
+COPY engines/zai.py /usr/local/searxng/searx/engines/zai.py
+COPY engines/serper.py /usr/local/searxng/searx/engines/serper.py
+RUN rm -f /usr/local/searxng/searx/engines/__pycache__/google*.pyc /usr/local/searxng/searx/engines/__pycache__/zai*.pyc /usr/local/searxng/searx/engines/__pycache__/serper*.pyc
