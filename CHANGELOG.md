@@ -6,7 +6,7 @@
 
 - Added Z.AI Web Search as a native SearXNG engine backed by Z.AI's remote Streamable HTTP MCP server; the existing `web_search` interface, cache, health, diagnostics, and fallback behavior remain unchanged.
 - Added Serper as a native SearXNG Google Search API engine with paging, locale, and time-range support.
-- Made the managed-provider chain `zai,serper,bing,yep,mwmbl,wiby` the default when provider keys are configured; deployments without keys can retain `bing,yep,mwmbl,wiby`.
+- Made the managed-provider chain `serper,zai,bing,yep,mwmbl,wiby` the default when provider keys are configured; the benchmark-selected order uses Serper as the fast/reliable primary and Z.AI as secondary, while deployments without keys can retain `bing,yep,mwmbl,wiby`.
 - Added ignored Docker-secret key files with tracked empty placeholders for keyless Compose startup.
 
 ### Testing and security

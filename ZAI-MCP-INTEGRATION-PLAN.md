@@ -105,7 +105,7 @@ Rotate the key after the integration is verified because it previously existed i
 After the initial plan was approved, the user expanded the scope to complete Serper as another general-search provider. Serper uses its official Search API, supports paging and time ranges, and follows Z.AI in the default chain:
 
 ```text
-zai,serper,bing,yep,mwmbl,wiby
+serper,zai,bing,yep,mwmbl,wiby
 ```
 
 ## Testing decisions
@@ -211,7 +211,7 @@ Acceptance criteria:
 The user approved:
 
 1. **Test seam:** mocked SearXNG engine interfaces, followed by one controlled live query per provider.
-2. **Rollout:** explicit verification first, then Z.AI primary and Serper secondary in the default provider chain.
+2. **Rollout:** explicit verification first; after the provider benchmark, Serper became primary and Z.AI secondary in the default provider chain.
 3. **Expanded scope:** complete Serper as a general-search provider rather than discarding it.
 
 ## Verification result
@@ -221,7 +221,7 @@ Deployed commit `cb9ca7e` to Kinkaid on 2026-07-17. Controlled production checks
 - explicit Z.AI MCP search returned normalized results without degradation;
 - an identical Z.AI request was served from the wrapper cache;
 - explicit Serper search returned normalized results without degradation;
-- the normal default route selected Z.AI from `zai,serper,bing,yep,mwmbl,wiby`;
+- before the benchmark reorder, the normal default route selected Z.AI from the then-current `zai,serper,bing,yep,mwmbl,wiby` chain;
 - both providers appear in `/engines`;
 - provider keys had zero matches in recent SearXNG/FastAPI logs;
 - GitHub CI completed successfully.

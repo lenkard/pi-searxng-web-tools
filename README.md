@@ -79,7 +79,7 @@ chmod 600 searxng/secrets/*_api_key
 cat >> .env <<'EOF'
 ZAI_API_KEY_FILE=./searxng/secrets/zai_api_key
 SERPER_API_KEY_FILE=./searxng/secrets/serper_api_key
-SEARXNG_DEFAULT_ENGINES=zai,serper,bing,yep,mwmbl,wiby
+SEARXNG_DEFAULT_ENGINES=serper,zai,bing,yep,mwmbl,wiby
 EOF
 ```
 
@@ -288,16 +288,18 @@ Operational notes from testing on a new OCI datacenter IP (2026-07-10):
 - Upstream behavior is IP- and time-dependent. Even currently working scraping engines may later block a datacenter IP; use an official API provider as the primary source for reliable production use.
 
 With provider key files configured, the wrapper uses
-`zai,serper,bing,yep,mwmbl,wiby` as a **sequential provider/fallback chain**.
-Z.AI MCP is primary, Serper is the managed general-search fallback, and the
-remaining engines avoid paid API usage when both are unavailable. Select either
+`serper,zai,bing,yep,mwmbl,wiby` as a **sequential provider/fallback chain**.
+Serper is primary because the provider benchmark found 5/5 success, sub-second
+median latency, and authoritative top-three results for every technical query.
+Z.AI MCP is the managed secondary, and the remaining engines avoid paid API
+usage when both are unavailable. Select either
 provider explicitly with `engines=zai` or `engines=serper`. Google CSE remains
 available for focused explicit searches but is not routine default traffic
 because all CSEs share one Google-facing residential IP. Override the chain
 without rebuilding:
 
 ```bash
-SEARXNG_DEFAULT_ENGINES=zai,serper,bing,yep,mwmbl,wiby docker compose up -d
+SEARXNG_DEFAULT_ENGINES=serper,zai,bing,yep,mwmbl,wiby docker compose up -d
 # or, without hosted-provider keys:
 SEARXNG_DEFAULT_ENGINES=bing,yep,mwmbl,wiby docker compose up -d
 ```
