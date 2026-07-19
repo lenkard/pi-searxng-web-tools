@@ -23,7 +23,7 @@ jobs:
       # CI-only value; never used in production.
       SEARXNG_SECRET: ci-secret-not-for-production-0123456789
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Provider engine unit tests
         # Protocol/API behavior is mocked; CI never calls live providers or uses real keys.
